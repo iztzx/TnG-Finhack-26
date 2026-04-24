@@ -29,7 +29,7 @@ export default function Sidebar() {
 
   return (
     <aside
-      className={`bg-sidebar text-white flex flex-col transition-all duration-300 ${
+      className={`bg-sidebar text-white flex flex-col h-full transition-all duration-300 ${
         collapsed ? 'w-20' : 'w-64'
       }`}
     >

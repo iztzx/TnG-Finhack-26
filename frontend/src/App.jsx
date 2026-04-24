@@ -24,7 +24,7 @@ import CommandCenter from './pages/admin/CommandCenter';
 
 // Layout implementations
 const AppLayout = () => (
-  <div className="flex min-h-screen bg-content">
+  <div className="flex h-screen overflow-hidden bg-content">
     <Sidebar />
     <main className="flex-1 overflow-auto">
       <Outlet />
@@ -33,7 +33,7 @@ const AppLayout = () => (
 );
 
 const AdminLayout = () => (
-  <div className="flex min-h-screen bg-[#0B0F1A]">
+  <div className="flex h-screen overflow-hidden bg-[#0B0F1A]">
     <AdminSidebar />
     <main className="flex-1 overflow-auto bg-gray-900">
       <Outlet />
