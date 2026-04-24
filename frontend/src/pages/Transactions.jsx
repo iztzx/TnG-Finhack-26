@@ -160,9 +160,9 @@ export default function Transactions() {
                 <button
                   key={opt}
                   onClick={() => setFilter(opt)}
-                  className={`px-3 py-1.5 rounded-lg text-sm font-medium transition-colors ${
+                  className={`px-3 py-1.5 rounded-lg text-sm font-medium transition-all ${
                     filter === opt
-                      ? 'bg-tng-blue text-white'
+                      ? 'bg-tng-blue text-white shadow-sm'
                       : 'bg-gray-50 text-gray-600 hover:bg-gray-100'
                   }`}
                 >
@@ -231,6 +231,14 @@ export default function Transactions() {
           <div className="text-center py-12 text-gray-400">
             <FileSpreadsheet className="w-8 h-8 mx-auto mb-2" />
             <p className="text-sm">No transactions match the selected filter.</p>
+            {filter !== 'ALL' && (
+              <button
+                onClick={() => setFilter('ALL')}
+                className="mt-4 px-4 py-2 bg-tng-blue/10 text-tng-blue rounded-lg text-sm font-medium hover:bg-tng-blue/20 transition-colors"
+              >
+                Clear Filters
+              </button>
+            )}
           </div>
         )}
 

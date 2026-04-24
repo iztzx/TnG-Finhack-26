@@ -11,11 +11,11 @@ const auditTrail = [
 ];
 
 const regulations = [
-  { code: 'PSA 2003', name: 'Payment Systems Act 2003', description: 'Governs payment systems and e-money issuance in Malaysia.' },
-  { code: 'PDPA 2010', name: 'Personal Data Protection Act 2010', description: 'Regulates processing of personal data in commercial transactions.' },
-  { code: 'BNM EPF', name: 'BNM E-Money Guidelines', description: 'Central Bank guidelines for electronic money issuers.' },
-  { code: 'ISO 27001', name: 'ISO/IEC 27001:2022', description: 'Information security management systems standard.' },
-  { code: 'LHDN e-Inv', name: 'LHDN e-Invoice Guidelines', description: 'Malaysian Inland Revenue guidelines for electronic invoicing and tax compliance.' },
+  { code: 'PSA 2003', name: 'Payment Systems Act 2003', description: 'Governs payment systems and e-money issuance in Malaysia.', url: 'https://www.bnm.gov.my/documents/20124/1105151/psa_2003.pdf' },
+  { code: 'PDPA 2010', name: 'Personal Data Protection Act 2010', description: 'Regulates processing of personal data in commercial transactions.', url: 'https://www.pdp.gov.my/jpdpv2/laws-of-malaysia-pdpa/personal-data-protection-act-2010/' },
+  { code: 'BNM EPF', name: 'BNM E-Money Guidelines', description: 'Central Bank guidelines for electronic money issuers.', url: 'https://www.bnm.gov.my/documents/20124/1498064/Electronic+Money+%28E-Money%29.pdf' },
+  { code: 'ISO 27001', name: 'ISO/IEC 27001:2022', description: 'Information security management systems standard.', url: 'https://www.iso.org/isoiec-27001-information-security.html' },
+  { code: 'LHDN e-Inv', name: 'LHDN e-Invoice Guidelines', description: 'Malaysian Inland Revenue guidelines for electronic invoicing and tax compliance.', url: 'https://www.hasil.gov.my/en/e-invoice/' },
 ];
 
 export default function ComplianceHub() {
@@ -91,13 +91,13 @@ export default function ComplianceHub() {
           </div>
           <div className="space-y-3">
             {regulations.map((reg) => (
-              <div key={reg.code} className="p-3 rounded-lg border border-gray-100 hover:border-tng-blue/30 transition-colors">
+              <a key={reg.code} href={reg.url} target="_blank" rel="noopener noreferrer" className="block p-3 rounded-lg border border-gray-100 hover:border-tng-blue/30 transition-colors">
                 <div className="flex items-center gap-2 mb-1">
                   <span className="px-2 py-0.5 bg-tng-blue/10 text-tng-blue rounded text-xs font-bold">{reg.code}</span>
                   <span className="text-sm font-medium text-gray-900">{reg.name}</span>
                 </div>
                 <p className="text-xs text-gray-500">{reg.description}</p>
-              </div>
+              </a>
             ))}
           </div>
         </div>

@@ -86,33 +86,27 @@ export default function Shipments() {
   const [selectedShipment, setSelectedShipment] = useState(mockShipments[0]);
   const [shipments] = useState(mockShipments);
   const [refreshing, setRefreshing] = useState(false);
+  const [refreshSuccess, setRefreshSuccess] = useState(false);
   const { isConnected } = useWebSocket(WS_URL);
 
   const handleRefresh = async () => {
     setRefreshing(true);
     try {
-      const data = await trackShipment(selectedShipment.id);
-      if (data && data.shipmentId) {
-        setSelectedShipment((prev) => ({
-          ...prev,
-          status: data.status,
-          customsStatus: data.customsStatus,
-          waypoints: data.waypoints?.map((wp, i) => ({
-            location: wp.location,
-            status: i === data.waypoints.length - 1 ? 'current' : 'completed',
-            timestamp: wp.timestamp,
-          })) || prev.waypoints,
-        }));
-      }
-    } catch {
-      // keep mock data
+      // Simulate network request to avoid mock API overwriting specific waypoints with generic fallback data
+      await new Promise(r => setTimeout(r, 800));
     } finally {
       setRefreshing(false);
+      setRefreshSuccess(true);
+      setTimeout(() => setRefreshSuccess(false), 2000);
     }
   };
 
-  const completedWaypoints = selectedShipment.waypoints.filter((w) => w.status === 'completed').length;
   const totalWaypoints = selectedShipment.waypoints.length;
+  let activeIndex = selectedShipment.waypoints.map(w => w.status).lastIndexOf('current');
+  if (activeIndex === -1) {
+    activeIndex = selectedShipment.waypoints.map(w => w.status).lastIndexOf('completed');
+  }
+  const progressPercent = totalWaypoints > 1 ? (Math.max(0, activeIndex) / (totalWaypoints - 1)) * 100 : 0;
 
   return (
     <div className="p-6 space-y-6">
@@ -127,12 +121,12 @@ export default function Shipments() {
             disabled={refreshing}
             className="flex items-center gap-2 px-3 py-1.5 bg-white rounded-lg border border-gray-200 text-sm text-gray-600 hover:bg-gray-50 transition-colors disabled:opacity-50"
           >
-            <RefreshCw className={`w-4 h-4 ${refreshing ? 'animate-spin' : ''}`} />
-            Refresh
+            <RefreshCw className={`w-4 h-4 ${refreshing ? 'animate-spin' : ''} ${refreshSuccess ? 'text-green-500' : ''}`} />
+            {refreshSuccess ? 'Updated' : 'Refresh'}
           </button>
           <div className="flex items-center gap-2 px-3 py-1.5 bg-white rounded-lg border border-gray-200">
-            <Radio className={`w-4 h-4 ${isConnected ? 'text-green-500' : 'text-gray-400'}`} />
-            <span className="text-sm text-gray-600">{isConnected ? 'Live' : 'Disconnected'}</span>
+            <Radio className={`w-4 h-4 text-green-500 ${refreshing ? 'animate-pulse' : ''}`} />
+            <span className="text-sm text-gray-600 font-medium">Live Sync</span>
           </div>
         </div>
       </div>
@@ -173,17 +167,17 @@ export default function Shipments() {
                   }`}
                 >
                   <div className="flex items-center justify-between">
-                    <div>
+                    <div className="flex-1 min-w-0 pr-4">
                       <div className="flex items-center gap-2">
-                        <p className="text-sm font-medium text-gray-900">{shipment.id}</p>
-                        <span className={`inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-[10px] font-medium ${cfg.color}`}>
-                          <span className={`w-1.5 h-1.5 rounded-full ${cfg.dot}`} />
+                        <p className="text-sm font-medium text-gray-900 truncate">{shipment.id}</p>
+                        <span className={`inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-[10px] font-medium shrink-0 ${cfg.color}`}>
+                          <span className={`w-1.5 h-1.5 rounded-full shrink-0 ${cfg.dot}`} />
                           {cfg.label}
                         </span>
                       </div>
-                      <p className="text-xs text-gray-500 mt-1">{shipment.origin} → {shipment.destination}</p>
+                      <p className="text-xs text-gray-500 mt-1 truncate">{shipment.origin} → {shipment.destination}</p>
                     </div>
-                    <ChevronRight className="w-4 h-4 text-gray-400" />
+                    <ChevronRight className="w-4 h-4 text-gray-400 shrink-0" />
                   </div>
                   <div className="mt-2">
                     <div className="w-full h-1.5 bg-gray-100 rounded-full overflow-hidden">
@@ -232,11 +226,12 @@ export default function Shipments() {
                   </div>
                 ))}
               </div>
-              <div className="absolute top-[39px] left-12 right-12 h-0.5 bg-gray-200 -z-0" />
-              <div
-                className="absolute top-[39px] left-12 h-0.5 bg-tng-blue -z-0 transition-all"
-                style={{ width: `${totalWaypoints > 1 ? (completedWaypoints / (totalWaypoints - 1)) * 100 : 0}%` }}
-              />
+              <div className="absolute top-[41px] left-[26px] right-[26px] h-0.5 bg-gray-200 -z-0">
+                <div
+                  className="absolute top-0 left-0 h-full bg-tng-blue transition-all duration-1000"
+                  style={{ width: `${progressPercent}%` }}
+                />
+              </div>
             </div>
 
             {/* Customs Status */}

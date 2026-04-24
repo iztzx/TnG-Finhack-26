@@ -44,7 +44,7 @@ const NODES = [
   {
     id: 'docai',
     x: 480, y: 200, w: 150, h: 76,
-    label: 'Document Processing (MY)',
+    label: 'Document AI (MY)',
     sublabel: 'Alibaba Document AI',
     Icon: FileSearch,
     color: '#f97316',
@@ -71,7 +71,7 @@ const NODES = [
   {
     id: 'ml',
     x: 900, y: 340, w: 150, h: 76,
-    label: 'Credit Scoring Engine (SG)',
+    label: 'ML Credit Engine (SG)',
     sublabel: 'AWS ML Engine',
     Icon: Brain,
     color: '#3b82f6',
@@ -126,16 +126,16 @@ const PATHS = [
     id: 'docai-fraud',
     d: 'M 555 238 L 625 302',
     label: 'Risk Check',
-    labelPos: { x: 590, y: 260 },
+    labelPos: { x: 620, y: 240 },
     stroke: '#f59e0b',
     particleColor: '#f59e0b',
     particles: 2,
     dur: 2.8,
     latency: '~180ms',
-    latencyPos: { x: 590, y: 290 },
+    latencyPos: { x: 630, y: 260 },
     boundaries: [
-      { x: 590, y: 260, text: 'Only metadata crosses — no financial data on Alibaba' },
-      { x: 590, y: 330, text: 'Risk scores & KYC never leave AWS' },
+      { x: 590, y: 270, text: 'Only metadata crosses — no financial data on Alibaba' },
+      { x: 640, y: 320, text: 'Risk scores & KYC never leave AWS' },
     ],
   },
   {
@@ -154,15 +154,15 @@ const PATHS = [
     id: 'iot-fraud',
     d: 'M 555 442 L 625 378',
     label: 'Verify Shipment',
-    labelPos: { x: 590, y: 418 },
+    labelPos: { x: 630, y: 440 },
     stroke: '#f59e0b',
     particleColor: '#f59e0b',
     particles: 2,
     dur: 2.8,
     latency: '~150ms',
-    latencyPos: { x: 590, y: 450 },
+    latencyPos: { x: 630, y: 460 },
     boundaries: [
-      { x: 590, y: 418, text: 'Only metadata crosses — no financial data on Alibaba' },
+      { x: 590, y: 410, text: 'Only metadata crosses — no financial data on Alibaba' },
     ],
   },
   {
@@ -401,12 +401,13 @@ export default function ArchitectureDiagram() {
       </div>
 
       {/* Diagram */}
-      <div className="flex-1 relative overflow-hidden" style={{ minHeight: 520 }}>
-        <svg
-          viewBox="0 0 1200 680"
-          className="w-full h-full"
-          preserveAspectRatio="xMidYMid meet"
-        >
+      <div className="flex-1 relative overflow-x-auto overflow-y-hidden" style={{ minHeight: 520 }}>
+        <div className="min-w-[1100px] h-full">
+          <svg
+            viewBox="0 0 1200 680"
+            className="w-full h-full"
+            preserveAspectRatio="xMidYMid meet"
+          >
           <defs>
             {/* Glow filter */}
             <filter id="glow" x="-50%" y="-50%" width="200%" height="200%">
@@ -801,7 +802,8 @@ export default function ArchitectureDiagram() {
               </g>
             );
           })}
-        </svg>
+          </svg>
+        </div>
 
         {/* Detail panel */}
         <AnimatePresence>

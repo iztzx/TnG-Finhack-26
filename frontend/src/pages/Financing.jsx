@@ -571,13 +571,14 @@ export default function Financing() {
                       </div>
                     ))}
                   </div>
-                  <div className="absolute top-7 left-8 right-8 h-0.5 bg-gray-200 -z-0" />
-                  <div
-                    className="absolute top-7 left-8 h-0.5 bg-tng-blue -z-0 transition-all"
-                    style={{
-                      width: `${((shipmentData.waypoints?.findIndex((wp) => wp.location === shipmentData.currentLocation?.location) || 0) / Math.max((shipmentData.waypoints?.length || 1) - 1, 1)) * 100}%`
-                    }}
-                  />
+                  <div className="absolute top-[31px] left-[8px] right-[8px] h-0.5 bg-gray-200 -z-0">
+                    <div
+                      className="absolute top-0 left-0 h-full bg-tng-blue transition-all duration-1000"
+                      style={{
+                        width: `${((shipmentData.waypoints?.findIndex((wp) => wp.location === shipmentData.currentLocation?.location) || 0) / Math.max((shipmentData.waypoints?.length || 1) - 1, 1)) * 100}%`
+                      }}
+                    />
+                  </div>
                 </div>
 
                 <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mt-4">

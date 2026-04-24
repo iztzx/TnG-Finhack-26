@@ -162,25 +162,27 @@ export default function Analytics() {
             <Brain className="w-5 h-5 text-tng-blue" />
             <h2 className="text-lg font-semibold text-gray-900">Portfolio Risk Distribution</h2>
           </div>
-          <ResponsiveContainer width="100%" height={260}>
-            <PieChart>
-              <Pie
-                data={mockPortfolioRisk}
-                cx="50%"
-                cy="50%"
-                innerRadius={60}
-                outerRadius={90}
-                paddingAngle={4}
-                dataKey="value"
-              >
-                {mockPortfolioRisk.map((entry, index) => (
-                  <Cell key={`cell-${index}`} fill={entry.color} />
-                ))}
-              </Pie>
-              <Tooltip contentStyle={{ borderRadius: 8, border: '1px solid #e5e7eb', fontSize: 12 }} />
-              <Legend verticalAlign="bottom" height={36} iconType="circle" />
-            </PieChart>
-          </ResponsiveContainer>
+          <div className="h-[260px]">
+            <ResponsiveContainer width="100%" height="100%">
+              <PieChart>
+                <Pie
+                  data={mockPortfolioRisk}
+                  cx="50%"
+                  cy="50%"
+                  innerRadius={60}
+                  outerRadius={90}
+                  paddingAngle={4}
+                  dataKey="value"
+                >
+                  {mockPortfolioRisk.map((entry, index) => (
+                    <Cell key={`cell-${index}`} fill={entry.color} />
+                  ))}
+                </Pie>
+                <Tooltip contentStyle={{ borderRadius: 8, border: '1px solid #e5e7eb', fontSize: 12 }} />
+                <Legend verticalAlign="bottom" height={36} iconType="circle" />
+              </PieChart>
+            </ResponsiveContainer>
+          </div>
         </div>
 
         {/* Feature Importance */}

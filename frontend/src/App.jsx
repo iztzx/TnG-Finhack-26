@@ -12,7 +12,7 @@ import AIAssistant from './pages/AIAssistant';
 export default function App() {
   return (
     <BrowserRouter>
-      <div className="flex min-h-screen bg-content">
+      <div className="flex h-screen overflow-hidden bg-content">
         <Sidebar />
         <main className="flex-1 overflow-auto">
           <Routes>

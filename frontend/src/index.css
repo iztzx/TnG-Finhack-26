@@ -43,3 +43,27 @@ body {
 ::-webkit-scrollbar-thumb:hover {
   background: #a8a8a8;
 }
+
+/* Global button micro-animations */
+button {
+  transition: transform 0.2s cubic-bezier(0.4, 0, 0.2, 1), opacity 0.2s;
+}
+
+button:hover:not(:disabled) {
+  transform: translateY(-1px);
+}
+
+button:active:not(:disabled) {
+  transform: translateY(1px);
+}
+
+/* Remove default focus outline from Recharts */
+.recharts-wrapper,
+.recharts-surface,
+.recharts-sector,
+.recharts-bar-rectangle,
+.recharts-responsive-container,
+.recharts-responsive-container:focus,
+.recharts-wrapper * {
+  outline: none !important;
+}

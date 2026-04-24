@@ -1,6 +1,6 @@
 # TnG Logistics Finance Platform
 
-**Flexport alternative: IoT-powered supply chain financing for Malaysian exporters and logistics operators**
+**Flexport alternative: GPS-powered supply chain financing for Malaysian exporters and logistics operators**
 
 Group: Indecisive | FinHack 26
 
@@ -8,11 +8,11 @@ Group: Indecisive | FinHack 26
 
 ## 📋 Overview
 
-The TnG Logistics Finance Platform is a fintech solution that revolutionizes supply chain financing by underwriting **shipping routes and IoT-tracked shipments** instead of traditional business owner creditworthiness. We combine real-time GPS tracking, IoT sensor monitoring, and AI risk assessment to offer instant credit to exporters, importers, and logistics companies based on their cargo and delivery route data.
+The TnG Logistics Finance Platform is a fintech solution that revolutionizes supply chain financing by underwriting **shipping routes and GPS-tracked shipments** instead of traditional business owner creditworthiness. We combine real-time GPS tracking, satellite imagery monitoring, and AI risk assessment to offer instant credit to exporters, importers, and logistics companies based on their cargo and delivery route data.
 
 **Key Features:**
 - 🚚 **Route-Based Underwriting** - Credit scoring based on shipping routes, not business owners (no HITA)
-- 📍 **Real-Time Shipment Tracking** - GPS-enabled IoT monitoring across Malaysia, Singapore, and regional routes
+- 📍 **Real-Time Shipment Tracking** - GPS-enabled satellite/GPS monitoring across Malaysia, Singapore, and regional routes
 - ⚡ **Instant Invoice Financing** - Quick credit against shipments and invoices (support for export financing)
 - 🤖 **Supply Chain AI** - ML models trained on shipment data, customs clearance, and logistics patterns
 - 📊 **Live Logistics Dashboard** - Real-time KPI tracking for shipments, routes, and credit portfolio
@@ -49,7 +49,7 @@ Traditional hire-purchase (HITA) underwriting focuses on:
 | **Underwriting** | Business owner focus | Route-based, shipment-centric |
 | **Approval Speed** | Days | Minutes (via AI) |
 | **Regional Focus** | Global | Southeast Asia (optimized) |
-| **IoT Integration** | Optional partner | Native, mandatory |
+| **GPS Integration** | Optional partner | Native, mandatory |
 | **Regulatory** | Complex cross-border | Malaysia-centric compliance |
 | **Target Market** | Large exporters | SME exporters & importers |
 
@@ -59,7 +59,7 @@ Traditional hire-purchase (HITA) underwriting focuses on:
 
 ```
 TnG Logistics Finance Platform
-├── IoT Shipment Tracking (GPS + Sensors)
+├── Shipment Tracking (GPS + Satellite)
 ├── Route Intelligence Engine (ML Risk Assessment)
 ├── Frontend Dashboard (Real-time Logistics View)
 ├── Backend (AWS Lambda + Invoice Processing)
@@ -74,7 +74,7 @@ TnG Logistics Finance Platform
 | **Frontend** | React 19 + Vite + Tailwind CSS | Shipment tracking dashboard & invoicing UI |
 | **Backend** | AWS Lambda + SAM | Invoice financing, shipment verification |
 | **ML** | scikit-learn + pandas | Route risk scoring & cargo assessment |
-| **IoT** | GPS + MQTT + WebSocket | Real-time shipment telemetry |
+| **Tracking** | GPS API + Webhooks | Real-time shipment telemetry |
 | **Deployment** | AWS CloudFormation | Infrastructure as Code |
 
 ### Supply Chain Financing Flow
@@ -82,7 +82,7 @@ TnG Logistics Finance Platform
 ```
 Exporter/Importer
         ↓
-    [Shipment Created + IoT Tracking]
+    [Shipment Created + GPS Tracking]
         ↓
     [Route & Cargo Assessment]
         ↓
@@ -250,7 +250,6 @@ python create_lambda_layer.py
 - **Route Risk Distribution**: Visual breakdown of credit risk by shipping corridor (Malaysia-Singapore-Thailand, etc.)
 - **Customs Status Monitor**: Real-time clearance tracking across ports
 - **Financing Pipeline**: Pending invoices, approved shipments, and disbursed amounts
-- **IoT Sensor Analytics**: Temperature, humidity, and signal strength across active shipments
 
 ### Pages
 
@@ -266,7 +265,6 @@ python create_lambda_layer.py
 ### Key UI Components
 
 - **ShipmentsTracker** - Multi-waypoint route visualization with real-time GPS
-- **IoTPanel** - Sensor data display (temperature, humidity, battery, signal strength)
 - **RiskGauge** - Route risk scoring visualization (0-1000 scale)
 - **TransactionTable** - Financing offers and shipment status sortable table
 - **ComplianceBadge** - Customs clearance and documentation status
@@ -282,7 +280,7 @@ Live shipment updates pushed via WebSocket (see `hooks/useWebSocket.js`):
 
 ```javascript
 const socket = useWebSocket('ws://localhost:8000/ws');
-// Receives: shipment locations, IoT sensor data, customs status updates, financing offers
+// Receives: shipment locations, satellite imagery, customs status updates, financing offers
 ```
 
 ### REST API Endpoints
@@ -351,7 +349,7 @@ The model assesses **shipment route risk** based on:
 - Number of waypoints/transfers
 - Countries/borders crossed
 - Geopolitical risk scores
-- IoT signal strength and sensor reliability
+- Satellite tracking reliability
 
 ### Why Route-Based, Not Owner-Based
 
@@ -365,14 +363,14 @@ Unlike traditional HITA models that assess business owner creditworthiness, we a
 
 ---
 
-## � IoT Integration & Real-Time Tracking
+## � GPS Integration & Real-Time Tracking
 
 ### Supported Platforms
 
-- **GPS-Enabled IoT Trackers** on containers and pallets
+- **GPS Tracking APIs** from shipping partners
 - **MQTT Protocol** for device telemetry
 - **WebSocket** for browser real-time updates
-- **Alibaba IoT Hub** integration for regional (China) shipments
+- **Satellite Imagery** for visual confirmation of cargo
 
 ### Shipment Monitoring Features
 
@@ -511,7 +509,7 @@ The project includes a **synthetic supply chain dataset** (`ml/data/synthetic_sm
 - **Route features** (origin, destination, distance, customs history)
 - **Cargo attributes** (value, commodity type, temperature requirements)
 - **Carrier data** (carrier name, historical performance)
-- **IoT sensor readings** (temperature, humidity, battery, signal)
+- **Satellite verification data**
 - **Delivery outcomes** (on-time, delayed, issues)
 - **Customs clearance data** (clearance time, flags, inspections)
 
@@ -524,7 +522,7 @@ The project includes a **synthetic supply chain dataset** (`ml/data/synthetic_sm
 - Integrate with actual port APIs (Port Klang, Singapore, Bangkok, Manila)
 - Connect with carrier APIs for real tracking
 - Use actual customs clearance records
-- Implement real IoT device data feeds
+- Implement real shipping partner GPS webhooks
 
 ---
 
@@ -539,7 +537,6 @@ The project includes a **synthetic supply chain dataset** (`ml/data/synthetic_sm
 
 ✅ **Data Protection**
 - Encrypted connections (HTTPS/WSS) for all APIs
-- IoT device authentication via certificates
 - Sensitive data (invoice PDFs, routing info) encrypted at rest
 - PII handling in compliance with PDPA (Malaysia)
 
@@ -553,7 +550,6 @@ The project includes a **synthetic supply chain dataset** (`ml/data/synthetic_sm
 ✅ **Audit & Logging**
 - CloudWatch logs for all Lambda invocations
 - Transaction audit trail for financing decisions
-- IoT sensor event logging
 - API request/response logging for dispute resolution
 - Shipment event timeline (immutable)
 
@@ -587,7 +583,6 @@ VITE_REQUEST_TIMEOUT=15000
 - AWS CLI configured and authenticated
 - SAM CLI installed
 - Production RDS database (DynamoDB or Aurora)
-- IoT Hub setup (Alibaba or AWS IoT Core)
 
 **Deployment Steps:**
 
@@ -706,7 +701,7 @@ curl -X POST http://localhost:3000/invoices/INV-xxx/accept \
 npm install -g wscat
 wscat -c ws://localhost:8000/ws
 
-# Should receive: shipment updates, IoT sensor data, offer notifications
+# Should receive: shipment updates, satellite imagery, offer notifications
 ```
 
 ### QA Documentation
@@ -736,7 +731,7 @@ See [demo-script.md](docs/demo-script.md) for:
 - **Dashboard Load**: <2 seconds
 - **Concurrent Shipments**: 1,000+ tracked simultaneously
 - **Invoice Processing**: <500ms per document
-- **IoT Throughput**: 10,000+ sensor readings per second
+- **Tracking Throughput**: 10,000+ location updates per second
 
 ### Scaling Strategies
 
@@ -797,58 +792,7 @@ See [demo-script.md](docs/demo-script.md) for:
    wscat -c ws://localhost:8000/ws
    # Should print "[connected]"
    ```
-2. Check IoT simulator is running:
-   ```bash
-   ps aux | grep simulator.py
-   ```
-3. Verify firewall allows WebSocket port 8000
-4. Check browser console for WebSocket errors (F12 → Network → WS)
-
-### Invoice Financing Returns "No Offer"
-
-**Problem:** analyze_invoice returns null offer or LOW_APPROVAL
-
-**Solutions:**
-1. Verify ML model files exist:
-   ```bash
-   ls ml/models/
-   # Should see: trained_model.pkl, feature_names.json
-   ```
-2. Check invoice data is complete (amount, destination required)
-3. Verify route exists in training data:
-   ```bash
-   python ml/predict.py --origin "Port Klang" --destination "Singapore Port"
-   ```
-4. Review AWS CloudWatch logs:
-   ```bash
-   aws logs tail /aws/lambda/CreditScoringFunction --follow
-   ```
-
-### Lambda Deployment Fails
-
-**Problem:** "sam deploy" returns permission errors
-
-**Solutions:**
-1. Verify AWS credentials: `aws sts get-caller-identity`
-2. Check IAM permissions for CloudFormation, Lambda, DynamoDB
-3. Review SAM build output: `sam build --debug`
-4. Check template.yaml syntax: `sam validate`
-
-### IoT Sensor Data Missing
-
-**Problem:** Temperature/humidity readings showing 0 or null
-
-**Solutions:**
-1. Check simulator is sending data:
-   ```python
-   python iot/simulator.py --verbose
-   ```
-2. Verify WebSocket payload includes sensor object:
-   ```bash
-   wscat -c ws://localhost:8000/ws
-   # Look for: {"sensor": {"temp": ..., "humidity": ...}}
-   ```
-3. Check browser console for parsing errors
+2. Check GPS mocks in network tab3. Check browser console for parsing errors
 
 ### Model Training Crashes
 
@@ -877,7 +821,6 @@ See [demo-script.md](docs/demo-script.md) for:
 - [Backend README](backend/README.md) - Lambda functions and APIs
 - [Frontend README](frontend/README.md) - React components
 - [ML README](ml/README.md) - Model training guide
-- [IoT README](iot/README.md) - Shipment tracking integration
 
 ---
 
@@ -899,7 +842,7 @@ This project is part of the TnG FinHack 26 competition.
 - ✅ Route-based risk scoring
 - ✅ Real-time shipment tracking
 - ✅ Invoice financing (offer/acceptance)
-- ✅ IoT sensor monitoring
+- ✅ satellite imagery monitoring
 
 **Phase 2 (Q3 2026):**
 - [ ] Production ML model with real shipment data
@@ -938,3 +881,4 @@ For questions or issues:
 **Last Updated:** April 24, 2026  
 **Status:** Production Ready for Demo  
 **Mission:** Financing shipping routes, not business owners
+
