@@ -1,5 +1,5 @@
 import React from 'react';
-import { Activity, CreditCard, AlertCircle, Clock, FileText, CheckCircle2, TrendingUp, RefreshCw } from 'lucide-react';
+import { Activity, AlertCircle, Clock, FileText, RefreshCw, ShieldCheck, Wallet, ArrowRight, Banknote, TimerReset, CheckCircle2, TrendingUp } from 'lucide-react';
 
 export default function CommandCenter() {
   const [lastUpdated, setLastUpdated] = React.useState(new Date());
@@ -13,114 +13,146 @@ export default function CommandCenter() {
     }, 1000);
   };
 
+  const topMetrics = [
+    { label: 'Invoices in system', value: '142', delta: '+12% from yesterday', icon: FileText, tone: 'from-blue-600/25 to-blue-400/5 text-blue-100 border-blue-400/15' },
+    { label: 'Capital currently deployed', value: 'RM 4.2M', delta: 'RM 350k disbursed today', icon: Wallet, tone: 'from-emerald-500/20 to-emerald-400/5 text-emerald-100 border-emerald-400/15' },
+    { label: 'Overdue exposure', value: 'RM 85k', delta: '2 deals require intervention', icon: AlertCircle, tone: 'from-rose-500/20 to-rose-400/5 text-rose-100 border-rose-400/15' },
+    { label: 'Cases pending review', value: '18', delta: 'Median wait 23 mins', icon: Clock, tone: 'from-violet-500/20 to-violet-400/5 text-violet-100 border-violet-400/15' },
+  ];
+
+  const actionQueue = [
+    { title: 'Review pending invoices', meta: '18 submissions waiting on action', accent: 'bg-blue-600', count: '18' },
+    { title: 'Approve disbursement batches', meta: '5 ready after risk checks', accent: 'bg-slate-700', count: '5' },
+    { title: 'Resolve fraud alerts', meta: '1 high-priority anomaly surfaced', accent: 'bg-rose-600', count: '1' },
+    { title: 'Generate treasury report', meta: 'Export today\'s funding summary', accent: 'bg-emerald-600', count: 'Live' },
+  ];
+
   return (
-    <div className="p-6 space-y-6">
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-2xl font-bold text-white">Command Center</h1>
-          <p className="text-gray-400 text-sm">Real-time overview of platform activity</p>
-        </div>
-        <div className="flex items-center gap-3">
-          <div className="text-sm text-gray-400 bg-gray-800/50 px-4 py-2 rounded-lg border border-gray-700">
-            Last updated: {lastUpdated.toLocaleTimeString()}
+    <div className="space-y-6">
+      <section className="overflow-hidden rounded-[32px] border border-white/8 bg-[linear-gradient(135deg,_rgba(15,23,42,0.88)_0%,_rgba(17,24,39,0.96)_50%,_rgba(3,105,161,0.55)_100%)] p-6 shadow-[0_24px_80px_rgba(2,6,23,0.45)] sm:p-7">
+        <div className="flex flex-col gap-5 lg:flex-row lg:items-end lg:justify-between">
+          <div className="max-w-2xl">
+            <span className="inline-flex items-center gap-2 rounded-full border border-cyan-400/20 bg-cyan-400/10 px-3 py-1 text-xs uppercase tracking-[0.24em] text-cyan-100">
+              <ShieldCheck className="h-3.5 w-3.5" />
+              Platform oversight
+            </span>
+            <h1 className="mt-4 text-3xl font-semibold tracking-tight text-white sm:text-4xl">Command Center</h1>
+            <p className="mt-3 text-sm leading-6 text-slate-300">
+              A cleaner operator view for approvals, deployment, delinquency and throughput, without blending customer-facing metrics into the admin flow.
+            </p>
           </div>
-          <button
-            onClick={handleRefresh}
-            disabled={isRefreshing}
-            className="flex items-center gap-2 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-sm font-medium transition-all disabled:opacity-50 disabled:cursor-not-allowed"
-          >
-            <RefreshCw className={`w-4 h-4 ${isRefreshing ? 'animate-spin' : ''}`} />
-            Refresh
-          </button>
+          <div className="flex flex-wrap items-center gap-3">
+            <div className="rounded-2xl border border-white/10 bg-white/5 px-4 py-3 text-sm text-slate-300">
+              Last updated: {lastUpdated.toLocaleTimeString()}
+            </div>
+            <button
+              onClick={handleRefresh}
+              disabled={isRefreshing}
+              className="inline-flex items-center gap-2 rounded-2xl bg-blue-600 px-4 py-3 text-sm font-medium text-white hover:bg-blue-500 disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              <RefreshCw className={`h-4 w-4 ${isRefreshing ? 'animate-spin' : ''}`} />
+              Refresh
+            </button>
+          </div>
         </div>
+      </section>
+
+      <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-4">
+        {topMetrics.map((metric) => (
+          <div key={metric.label} className={`rounded-[28px] border bg-gradient-to-br ${metric.tone} p-5 shadow-sm backdrop-blur`}>
+            <div className="flex items-start justify-between gap-3">
+              <div>
+                <p className="text-sm text-slate-300">{metric.label}</p>
+                <h3 className="mt-3 text-3xl font-semibold text-white">{metric.value}</h3>
+              </div>
+              <div className="rounded-2xl border border-white/10 bg-white/5 p-3">
+                <metric.icon className="h-5 w-5 text-white" />
+              </div>
+            </div>
+            <div className="mt-4 flex items-center gap-2 text-sm text-slate-300">
+              <TrendingUp className="h-4 w-4" />
+              {metric.delta}
+            </div>
+          </div>
+        ))}
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
-        <div className="bg-gray-800 border border-gray-700 rounded-xl p-5 hover:border-blue-500/50 transition-all hover:shadow-lg hover:shadow-blue-500/10">
-          <div className="flex items-center gap-4">
-            <div className="p-3 bg-blue-500/10 text-blue-400 rounded-lg"><FileText size={24}/></div>
+      <div className="grid grid-cols-1 gap-6 xl:grid-cols-[minmax(0,1.5fr)_minmax(340px,0.9fr)]">
+        <section className="rounded-[32px] border border-white/8 bg-slate-950/45 p-6 shadow-sm backdrop-blur">
+          <div className="mb-5 flex items-center justify-between gap-3">
             <div>
-              <p className="text-sm text-gray-400">Total Invoices</p>
-              <h3 className="text-2xl font-bold text-white">142</h3>
+              <h2 className="text-lg font-semibold text-white">Operational activity</h2>
+              <p className="mt-1 text-sm text-slate-400">A readable feed of approvals, escalations and system actions.</p>
             </div>
+            <button className="inline-flex items-center gap-1 text-sm font-medium text-cyan-200 hover:text-white">
+              Open audit trail <ArrowRight className="h-4 w-4" />
+            </button>
           </div>
-          <div className="mt-4 text-sm text-blue-400 flex items-center gap-1"><TrendingUp size={16}/> +12% from yesterday</div>
-        </div>
-
-        <div className="bg-gray-800 border border-gray-700 rounded-xl p-5 hover:border-green-500/50 transition-all hover:shadow-lg hover:shadow-green-500/10">
-          <div className="flex items-center gap-4">
-            <div className="p-3 bg-green-500/10 text-green-400 rounded-lg"><CreditCard size={24}/></div>
-            <div>
-              <p className="text-sm text-gray-400">Active Deals</p>
-              <h3 className="text-2xl font-bold text-white">RM 4.2M</h3>
-            </div>
-          </div>
-          <div className="mt-4 text-sm text-green-400 flex items-center gap-1"><TrendingUp size={16}/> RM 350k disbursed today</div>
-        </div>
-
-        <div className="bg-gray-800 border border-gray-700 rounded-xl p-5 hover:border-red-500/50 transition-all hover:shadow-lg hover:shadow-red-500/10">
-          <div className="flex items-center gap-4">
-            <div className="p-3 bg-red-500/10 text-red-400 rounded-lg"><AlertCircle size={24}/></div>
-            <div>
-              <p className="text-sm text-gray-400">Overdue Repayments</p>
-              <h3 className="text-2xl font-bold text-white">RM 85k</h3>
-            </div>
-          </div>
-          <div className="mt-4 text-sm text-red-400 flex items-center gap-1">2 deals require attention</div>
-        </div>
-
-        <div className="bg-gray-800 border border-gray-700 rounded-xl p-5 hover:border-purple-500/50 transition-all hover:shadow-lg hover:shadow-purple-500/10">
-          <div className="flex items-center gap-4">
-            <div className="p-3 bg-purple-500/10 text-purple-400 rounded-lg"><Clock size={24}/></div>
-            <div>
-              <p className="text-sm text-gray-400">Pending Review</p>
-              <h3 className="text-2xl font-bold text-white">18</h3>
-            </div>
-          </div>
-          <div className="mt-4 text-sm text-gray-400 flex items-center gap-1">Invoices awaiting approval</div>
-        </div>
-      </div>
-
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        <div className="lg:col-span-2 bg-gray-800 border border-gray-700 rounded-xl p-6 hover:border-gray-600 transition-all">
-          <h2 className="text-lg font-semibold text-white mb-4">Recent Activity Feed</h2>
-          <div className="space-y-4">
-            {[1, 2, 3, 4, 5].map((i) => (
-              <div key={i} className="flex items-start gap-4 pb-4 border-b border-gray-700 last:border-0 hover:bg-gray-700/30 p-2 rounded-lg transition-colors">
-                <div className="p-2 bg-blue-500/10 text-blue-400 rounded-full mt-1">
-                  <Activity size={16} />
+          <div className="space-y-3">
+            {[
+              { icon: CheckCircle2, title: 'Invoice #INV-2026-1001 approved', meta: 'Approved by Finance Manager', time: '10 minutes ago', badge: 'Approved', badgeTone: 'bg-emerald-500/15 text-emerald-300' },
+              { icon: Banknote, title: 'Disbursement batch released', meta: 'RM 350,000 settled to 7 SMEs', time: '22 minutes ago', badge: 'Treasury', badgeTone: 'bg-blue-500/15 text-blue-300' },
+              { icon: AlertCircle, title: 'Fraud alert escalated', meta: 'Duplicate invoice evidence detected', time: '34 minutes ago', badge: 'Alert', badgeTone: 'bg-rose-500/15 text-rose-300' },
+              { icon: TimerReset, title: 'Review queue SLA reset', meta: 'Priority reviewer reassigned', time: '48 minutes ago', badge: 'Ops', badgeTone: 'bg-violet-500/15 text-violet-300' },
+              { icon: Activity, title: 'Carrier verification resynced', meta: 'All route integrity checks passed', time: '1 hour ago', badge: 'System', badgeTone: 'bg-cyan-500/15 text-cyan-300' },
+            ].map((item) => (
+              <div key={item.title} className="flex items-start gap-4 rounded-3xl border border-white/8 bg-white/[0.03] p-4 transition-colors hover:bg-white/[0.05]">
+                <div className="mt-0.5 rounded-2xl border border-white/8 bg-white/[0.05] p-3 text-cyan-200">
+                  <item.icon className="h-4 w-4" />
                 </div>
-                <div className="flex-1">
-                  <p className="text-sm text-white">Invoice #INV-2025-{1000+i} approved by <span className="font-semibold text-blue-400">Finance Manager</span></p>
-                  <p className="text-xs text-gray-500 mt-1">{i * 10} minutes ago • ID: 89f2c{i}</p>
+                <div className="min-w-0 flex-1">
+                  <div className="flex flex-wrap items-center gap-2">
+                    <p className="text-sm font-medium text-white">{item.title}</p>
+                    <span className={`rounded-full px-2.5 py-1 text-[11px] font-medium ${item.badgeTone}`}>{item.badge}</span>
+                  </div>
+                  <p className="mt-1 text-xs text-slate-400">{item.meta}</p>
                 </div>
-                <span className="text-xs text-green-400 bg-green-500/10 px-2 py-1 rounded">Approved</span>
+                <span className="whitespace-nowrap text-xs text-slate-500">{item.time}</span>
               </div>
             ))}
           </div>
-        </div>
+        </section>
 
-        <div className="bg-gray-800 border border-gray-700 rounded-xl p-6 hover:border-gray-600 transition-all">
-          <h2 className="text-lg font-semibold text-white mb-4">Quick Actions</h2>
-          <div className="space-y-3">
-            <button className="w-full flex items-center justify-between p-3 bg-blue-600 hover:bg-blue-700 text-white rounded-lg transition-all hover:scale-105">
-              <span className="font-medium">Review Pending Invoices</span>
-              <span className="bg-white/20 px-2 py-1 rounded text-xs">18</span>
-            </button>
-            <button className="w-full flex items-center justify-between p-3 bg-gray-700 hover:bg-gray-600 text-white rounded-lg transition-all hover:scale-105">
-              <span className="font-medium">Approve Deals</span>
-              <span className="bg-black/20 px-2 py-1 rounded text-xs">5</span>
-            </button>
-            <button className="w-full flex items-center justify-between p-3 bg-gray-700 hover:bg-gray-600 text-white rounded-lg transition-all hover:scale-105">
-              <span className="font-medium">Flag Fraud Alerts</span>
-              <span className="bg-red-500/20 text-red-400 px-2 py-1 rounded text-xs">1</span>
-            </button>
-            <button className="w-full flex items-center justify-between p-3 bg-gray-700 hover:bg-gray-600 text-white rounded-lg transition-all hover:scale-105">
-              <span className="font-medium">Generate Reports</span>
-              <CheckCircle2 size={16} />
-            </button>
+        <section className="space-y-4">
+          <div className="rounded-[32px] border border-white/8 bg-slate-950/45 p-6 shadow-sm backdrop-blur">
+            <h2 className="text-lg font-semibold text-white">Action queue</h2>
+            <div className="mt-5 space-y-3">
+              {actionQueue.map((item) => (
+                <button key={item.title} className={`w-full rounded-3xl ${item.accent} px-4 py-4 text-left text-white transition-transform hover:-translate-y-0.5`}>
+                  <div className="flex items-center justify-between gap-3">
+                    <div>
+                      <p className="text-sm font-semibold">{item.title}</p>
+                      <p className="mt-1 text-xs text-white/75">{item.meta}</p>
+                    </div>
+                    <span className="rounded-full bg-white/15 px-3 py-1 text-xs font-medium">{item.count}</span>
+                  </div>
+                </button>
+              ))}
+            </div>
           </div>
-        </div>
+
+          <div className="rounded-[32px] border border-white/8 bg-slate-950/45 p-6 shadow-sm backdrop-blur">
+            <h2 className="text-lg font-semibold text-white">Operator snapshot</h2>
+            <div className="mt-5 space-y-4">
+              {[
+                { label: 'Treasury utilisation', value: '68%', icon: Wallet },
+                { label: 'Average approval cycle', value: '23 min', icon: Clock },
+                { label: 'Automated pass-through rate', value: '74%', icon: Activity },
+                { label: 'Compliance exceptions', value: '3 open', icon: ShieldCheck },
+              ].map((item) => (
+                <div key={item.label} className="flex items-center gap-3 rounded-3xl border border-white/8 bg-white/[0.03] p-4">
+                  <div className="rounded-2xl border border-white/8 bg-white/[0.05] p-3 text-cyan-200">
+                    <item.icon className="h-4 w-4" />
+                  </div>
+                  <div className="min-w-0 flex-1">
+                    <p className="text-xs uppercase tracking-[0.2em] text-slate-500">{item.label}</p>
+                    <p className="mt-1 text-lg font-semibold text-white">{item.value}</p>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        </section>
       </div>
     </div>
   );

@@ -1,0 +1,344 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Transform: AWS::Serverless-2016-10-31
+Description: TnG FinHack 26 core data infrastructure for SME supply chain financing
+Parameters:
+  Environment:
+    Type: String
+    Default: dev
+    AllowedPattern: ^[a-z0-9-]+$
+    Description: Deployment environment suffix used for resource naming.
+Globals:
+  Function:
+    Runtime: python3.10
+    Timeout: 30
+    MemorySize: 256
+Resources:
+  InvoiceUploadsBucket:
+    Type: AWS::S3::Bucket
+    Properties:
+      BucketName:
+        Fn::Sub: tng-finhack-${Environment}-invoice-uploads-${AWS::AccountId}
+      PublicAccessBlockConfiguration:
+        BlockPublicAcls: true
+        BlockPublicPolicy: true
+        IgnorePublicAcls: true
+        RestrictPublicBuckets: true
+      CorsConfiguration:
+        CorsRules:
+        - AllowedOrigins:
+          - '*'
+          AllowedMethods:
+          - GET
+          - PUT
+          - POST
+          - HEAD
+          AllowedHeaders:
+          - '*'
+          ExposedHeaders:
+          - ETag
+          MaxAge: 3000
+      VersioningConfiguration:
+        Status: Enabled
+      Tags:
+      - Key: Project
+        Value: TnG-FinHack-26
+      - Key: Environment
+        Value:
+          Ref: Environment
+  UsersTable:
+    Type: AWS::DynamoDB::Table
+    DeletionPolicy: Retain
+    UpdateReplacePolicy: Retain
+    Properties:
+      TableName:
+        Fn::Sub: tng-finhack-${Environment}-users
+      BillingMode: PAY_PER_REQUEST
+      AttributeDefinitions:
+      - AttributeName: id
+        AttributeType: S
+      KeySchema:
+      - AttributeName: id
+        KeyType: HASH
+      SSESpecification:
+        SSEEnabled: true
+      PointInTimeRecoverySpecification:
+        PointInTimeRecoveryEnabled: true
+      Tags:
+      - Key: Project
+        Value: TnG-FinHack-26
+      - Key: Environment
+        Value:
+          Ref: Environment
+  InvoicesTable:
+    Type: AWS::DynamoDB::Table
+    DeletionPolicy: Retain
+    UpdateReplacePolicy: Retain
+    Properties:
+      TableName:
+        Fn::Sub: tng-finhack-${Environment}-invoices
+      BillingMode: PAY_PER_REQUEST
+      AttributeDefinitions:
+      - AttributeName: id
+        AttributeType: S
+      - AttributeName: smeId
+        AttributeType: S
+      KeySchema:
+      - AttributeName: id
+        KeyType: HASH
+      GlobalSecondaryIndexes:
+      - IndexName: SmeIdIndex
+        KeySchema:
+        - AttributeName: smeId
+          KeyType: HASH
+        Projection:
+          ProjectionType: ALL
+      SSESpecification:
+        SSEEnabled: true
+      PointInTimeRecoverySpecification:
+        PointInTimeRecoveryEnabled: true
+      Tags:
+      - Key: Project
+        Value: TnG-FinHack-26
+      - Key: Environment
+        Value:
+          Ref: Environment
+  OffersTable:
+    Type: AWS::DynamoDB::Table
+    DeletionPolicy: Retain
+    UpdateReplacePolicy: Retain
+    Properties:
+      TableName:
+        Fn::Sub: tng-finhack-${Environment}-offers
+      BillingMode: PAY_PER_REQUEST
+      AttributeDefinitions:
+      - AttributeName: id
+        AttributeType: S
+      - AttributeName: smeId
+        AttributeType: S
+      KeySchema:
+      - AttributeName: id
+        KeyType: HASH
+      GlobalSecondaryIndexes:
+      - IndexName: SmeIdIndex
+        KeySchema:
+        - AttributeName: smeId
+          KeyType: HASH
+        Projection:
+          ProjectionType: ALL
+      SSESpecification:
+        SSEEnabled: true
+      PointInTimeRecoverySpecification:
+        PointInTimeRecoveryEnabled: true
+      Tags:
+      - Key: Project
+        Value: TnG-FinHack-26
+      - Key: Environment
+        Value:
+          Ref: Environment
+  TransactionsTable:
+    Type: AWS::DynamoDB::Table
+    DeletionPolicy: Retain
+    UpdateReplacePolicy: Retain
+    Properties:
+      TableName:
+        Fn::Sub: tng-finhack-${Environment}-transactions
+      BillingMode: PAY_PER_REQUEST
+      AttributeDefinitions:
+      - AttributeName: id
+        AttributeType: S
+      KeySchema:
+      - AttributeName: id
+        KeyType: HASH
+      SSESpecification:
+        SSEEnabled: true
+      PointInTimeRecoverySpecification:
+        PointInTimeRecoveryEnabled: true
+      Tags:
+      - Key: Project
+        Value: TnG-FinHack-26
+      - Key: Environment
+        Value:
+          Ref: Environment
+  InvoiceWebhookFunctionRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName:
+        Fn::Sub: tng-finhack-${Environment}-invoice-webhook-role
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+        - Effect: Allow
+          Principal:
+            Service: lambda.amazonaws.com
+          Action: sts:AssumeRole
+      ManagedPolicyArns:
+      - arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole
+      Policies:
+      - PolicyName: InvoiceWebhookDynamoWritePolicy
+        PolicyDocument:
+          Version: '2012-10-17'
+          Statement:
+          - Sid: PutValidatedInvoices
+            Effect: Allow
+            Action:
+            - dynamodb:PutItem
+            Resource:
+              Fn::GetAtt:
+              - InvoicesTable
+              - Arn
+  ScoringFunctionRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName:
+        Fn::Sub: tng-finhack-${Environment}-scoring-role
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+        - Effect: Allow
+          Principal:
+            Service: lambda.amazonaws.com
+          Action: sts:AssumeRole
+      ManagedPolicyArns:
+      - arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole
+      Policies:
+      - PolicyName: ScoringDynamoAccessPolicy
+        PolicyDocument:
+          Version: '2012-10-17'
+          Statement:
+          - Sid: ReadAndUpdateInvoices
+            Effect: Allow
+            Action:
+            - dynamodb:GetItem
+            - dynamodb:UpdateItem
+            - dynamodb:Query
+            Resource:
+            - Fn::GetAtt:
+              - InvoicesTable
+              - Arn
+            - Fn::Sub: ${InvoicesTable.Arn}/index/SmeIdIndex
+          - Sid: CreateOffers
+            Effect: Allow
+            Action:
+            - dynamodb:PutItem
+            - dynamodb:Query
+            Resource:
+            - Fn::GetAtt:
+              - OffersTable
+              - Arn
+            - Fn::Sub: ${OffersTable.Arn}/index/SmeIdIndex
+  DisbursementFunctionRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName:
+        Fn::Sub: tng-finhack-${Environment}-disbursement-role
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+        - Effect: Allow
+          Principal:
+            Service: lambda.amazonaws.com
+          Action: sts:AssumeRole
+      ManagedPolicyArns:
+      - arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole
+      Policies:
+      - PolicyName: DisbursementDynamoAccessPolicy
+        PolicyDocument:
+          Version: '2012-10-17'
+          Statement:
+          - Sid: ReadOffersAndUsers
+            Effect: Allow
+            Action:
+            - dynamodb:GetItem
+            Resource:
+            - Fn::GetAtt:
+              - UsersTable
+              - Arn
+            - Fn::GetAtt:
+              - OffersTable
+              - Arn
+            - Fn::GetAtt:
+              - InvoicesTable
+              - Arn
+          - Sid: UpdateWalletAndFundingState
+            Effect: Allow
+            Action:
+            - dynamodb:UpdateItem
+            Resource:
+            - Fn::GetAtt:
+              - UsersTable
+              - Arn
+            - Fn::GetAtt:
+              - OffersTable
+              - Arn
+            - Fn::GetAtt:
+              - InvoicesTable
+              - Arn
+          - Sid: WriteDisbursementLedger
+            Effect: Allow
+            Action:
+            - dynamodb:PutItem
+            Resource:
+              Fn::GetAtt:
+              - TransactionsTable
+              - Arn
+  ReconciliationFunctionRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName:
+        Fn::Sub: tng-finhack-${Environment}-reconciliation-role
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+        - Effect: Allow
+          Principal:
+            Service: lambda.amazonaws.com
+          Action: sts:AssumeRole
+      ManagedPolicyArns:
+      - arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole
+      Policies:
+      - PolicyName: ReconciliationReadOnlyPolicy
+        PolicyDocument:
+          Version: '2012-10-17'
+          Statement:
+          - Sid: ReadLedgerForReports
+            Effect: Allow
+            Action:
+            - dynamodb:GetItem
+            - dynamodb:Query
+            - dynamodb:Scan
+            Resource:
+            - Fn::GetAtt:
+              - UsersTable
+              - Arn
+            - Fn::GetAtt:
+              - InvoicesTable
+              - Arn
+            - Fn::Sub: ${InvoicesTable.Arn}/index/SmeIdIndex
+            - Fn::GetAtt:
+              - OffersTable
+              - Arn
+            - Fn::Sub: ${OffersTable.Arn}/index/SmeIdIndex
+            - Fn::GetAtt:
+              - TransactionsTable
+              - Arn
+Outputs:
+  InvoiceUploadsBucketName:
+    Description: S3 bucket used for invoice uploads before OCR and underwriting.
+    Value:
+      Ref: InvoiceUploadsBucket
+  UsersTableName:
+    Description: DynamoDB table storing SME user profiles.
+    Value:
+      Ref: UsersTable
+  InvoicesTableName:
+    Description: DynamoDB table storing invoice records.
+    Value:
+      Ref: InvoicesTable
+  OffersTableName:
+    Description: DynamoDB table storing financing offers.
+    Value:
+      Ref: OffersTable
+  TransactionsTableName:
+    Description: DynamoDB table storing cashflow and financing transactions.
+    Value:
+      Ref: TransactionsTable

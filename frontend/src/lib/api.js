@@ -77,18 +77,18 @@ export const downloadReconciliation = async () => {
   }
 };
 
-export const getLatestTelemetry = async () => {
+export const getLatestTrackingSnapshot = async () => {
   try {
-    const response = await api.get('/telemetry/latest');
+    const response = await api.get('/tracking/latest');
     return response.data;
   } catch (err) {
-    console.warn('getLatestTelemetry fallback:', err.message);
+    console.warn('getLatestTrackingSnapshot fallback:', err.message);
     return {
-      deviceId: 'demo-device-001',
-      gps: { lat: 3.1390, lng: 101.6869 },
-      battery: 87,
-      signal: -65,
-      temperature: 32.5,
+      shipmentId: 'SHP-7781',
+      partnerLocation: { lat: 3.139, lng: 101.6869 },
+      source: 'shipping-partner-api',
+      satelliteConfidence: 'HIGH',
+      routeIntegrity: 'VERIFIED',
       timestamp: Date.now(),
     };
   }
@@ -258,10 +258,10 @@ export const verifyShipment = async (shipmentId, shipmentValue = 50000) => {
       advanceRate: 0.85,
       shipmentValue,
       riskAssessment: {
-        carrierApiStatus: 'CONNECTED',
+        locationFeedStatus: 'CONNECTED',
         satelliteImageryAvailable: true,
         customsClearance: 'CLEARED',
-        carrierVerification: 'VERIFIED',
+        partnerLocationVerification: 'VERIFIED',
         deliveryConfirmation: true,
         routeIntegrity: 'VERIFIED',
         locationAccuracy: 'HIGH',

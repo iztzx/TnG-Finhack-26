@@ -1,13 +1,10 @@
 import React from 'react';
 import { BrowserRouter, Routes, Route, Navigate, Outlet } from 'react-router-dom';
-import { AuthProvider } from './context/AuthContext';
 import ProtectedRoute from './components/auth/ProtectedRoute';
 import AdminRoute from './components/auth/AdminRoute';
 import Landing from './pages/Landing';
 import Login from './pages/Login';
 import Register from './pages/Register';
-
-// Original Components
 import Sidebar from './components/Sidebar';
 import AdminSidebar from './components/admin/AdminSidebar';
 import Dashboard from './pages/Dashboard';
@@ -18,30 +15,30 @@ import ComplianceHub from './pages/ComplianceHub';
 import Analytics from './pages/Analytics';
 import ArchitectureDiagram from './pages/ArchitectureDiagram';
 import AIAssistant from './pages/AIAssistant';
-
-// Admin Pages
 import CommandCenter from './pages/admin/CommandCenter';
 
-// Layout implementations
 const AppLayout = () => (
-  <div className="flex h-screen overflow-hidden bg-content">
+  <div className="h-screen overflow-hidden bg-[radial-gradient(circle_at_top_left,_rgba(0,90,187,0.12),_transparent_30%),linear-gradient(180deg,_#f5f7fb_0%,_#edf2f8_100%)] lg:flex">
     <Sidebar />
-    <main className="flex-1 overflow-auto">
-      <Outlet />
+    <main className="min-h-0 min-w-0 flex-1 overflow-y-auto overflow-x-hidden">
+      <div className="mx-auto max-w-6xl px-4 py-4 sm:px-5 sm:py-4 lg:px-6">
+        <Outlet />
+      </div>
     </main>
   </div>
 );
 
 const AdminLayout = () => (
-  <div className="flex h-screen overflow-hidden bg-[#0B0F1A]">
+  <div className="h-screen overflow-hidden bg-[radial-gradient(circle_at_top_left,_rgba(59,130,246,0.18),_transparent_25%),linear-gradient(180deg,_#09111f_0%,_#0f1728_100%)] lg:flex">
     <AdminSidebar />
-    <main className="flex-1 overflow-auto bg-gray-900">
-      <Outlet />
+    <main className="min-h-0 min-w-0 flex-1 overflow-y-auto overflow-x-hidden">
+      <div className="mx-auto max-w-[1400px] px-4 py-4 sm:px-5 sm:py-4 lg:px-6">
+        <Outlet />
+      </div>
     </main>
   </div>
 );
 
-// Admin Placeholder Components
 const ReviewQueue = () => <div className="p-6 text-white text-2xl font-bold">Review Queue (Under Construction)</div>;
 const SMEList = () => <div className="p-6 text-white text-2xl font-bold">SME Management (Under Construction)</div>;
 const MasterLedger = () => <div className="p-6 text-white text-2xl font-bold">Finance & Treasury (Under Construction)</div>;
@@ -52,12 +49,10 @@ export default function App() {
   return (
     <BrowserRouter>
       <Routes>
-        {/* Public routes */}
         <Route path="/" element={<Landing />} />
         <Route path="/login" element={<Login />} />
         <Route path="/register" element={<Register />} />
 
-        {/* SME User Portal — requires authentication */}
         <Route element={<ProtectedRoute />}>
           <Route element={<AppLayout />}>
             <Route path="/dashboard" element={<Dashboard />} />
@@ -68,12 +63,10 @@ export default function App() {
             <Route path="/analytics" element={<Analytics />} />
             <Route path="/architecture" element={<ArchitectureDiagram />} />
             <Route path="/assistant" element={<AIAssistant />} />
-            {/* Provide backward compatibility for any links going to / */}
             <Route path="/" element={<Navigate to="/dashboard" replace />} />
           </Route>
         </Route>
 
-        {/* Admin Portal — requires admin role */}
         <Route element={<AdminRoute />}>
           <Route element={<AdminLayout />}>
             <Route path="/admin/dashboard" element={<CommandCenter />} />
@@ -85,7 +78,6 @@ export default function App() {
           </Route>
         </Route>
 
-        {/* 404 fallback */}
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>
     </BrowserRouter>

@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { Download, Filter, Calendar, FileSpreadsheet, ArrowUpDown, ArrowUp, ArrowDown } from 'lucide-react';
+import { Download, Filter, Calendar, FileSpreadsheet, ArrowUpDown, ArrowUp, ArrowDown, CircleDollarSign, Clock3, BadgeCheck, ReceiptText } from 'lucide-react';
 import { listInvoices, downloadReconciliation } from '../lib/api';
 
 const filterOptions = ['ALL', 'FUNDED', 'REPAID', 'PENDING_REVIEW', 'OFFER_MADE', 'ANALYZED'];
@@ -76,9 +76,12 @@ export default function Transactions() {
       return 0;
     });
 
+  const completedInvoices = invoices.filter((i) => i.status === 'REPAID').length;
   const totalDisbursed = invoices.filter((i) => i.status === 'FUNDED' || i.status === 'REPAID').reduce((sum, i) => sum + (i.netDisbursement || 0), 0);
-  const totalFees = invoices.filter((i) => i.status === 'FUNDED' || i.status === 'REPAID').reduce((sum, i) => sum + (i.factoringFee || 0), 0);
   const pendingRepayments = invoices.filter((i) => i.status === 'FUNDED').reduce((sum, i) => sum + (i.amount || 0), 0);
+  const averageAdvanceRate = invoices.length
+    ? invoices.reduce((sum, i) => sum + (((i.netDisbursement || 0) / Math.max(i.amount || 1, 1)) * 100), 0) / invoices.length
+    : 0;
 
   const handleDownload = async () => {
     setDownloading(true);
@@ -88,20 +91,19 @@ export default function Transactions() {
       const url = window.URL.createObjectURL(blob);
       const a = document.createElement('a');
       a.href = url;
-      a.download = 'tng_reconciliation.xlsx';
+      a.download = 'tng_statement.xlsx';
       a.click();
       window.URL.revokeObjectURL(url);
     } catch {
-      // Fallback: create a simple CSV
       const csv = [
-        ['Invoice ID', 'Vendor', 'Amount (RM)', 'Factoring Fee (RM)', 'Disbursed (RM)', 'Status', 'Date'].join(','),
-        ...invoices.map((i) => [i.invoiceId, i.vendorName, i.amount, i.factoringFee, i.netDisbursement, i.status, i.invoiceDate].join(',')),
+        ['Invoice ID', 'Vendor', 'Invoice Amount (RM)', 'Advanced To You (RM)', 'Status', 'Date'].join(','),
+        ...invoices.map((i) => [i.invoiceId, i.vendorName, i.amount, i.netDisbursement, i.status, i.invoiceDate].join(',')),
       ].join('\n');
       const blob = new Blob([csv], { type: 'text/csv' });
       const url = window.URL.createObjectURL(blob);
       const a = document.createElement('a');
       a.href = url;
-      a.download = 'tng_reconciliation.csv';
+      a.download = 'tng_statement.csv';
       a.click();
       window.URL.revokeObjectURL(url);
     } finally {
@@ -119,38 +121,75 @@ export default function Transactions() {
   const headers = [
     { key: 'invoiceId', label: 'Invoice ID' },
     { key: 'vendorName', label: 'Vendor' },
-    { key: 'amount', label: 'Amount (RM)' },
-    { key: 'factoringFee', label: 'Factoring Fee (RM)' },
-    { key: 'netDisbursement', label: 'Disbursed (RM)' },
+    { key: 'amount', label: 'Invoice Amount (RM)' },
+    { key: 'netDisbursement', label: 'Advanced To You (RM)' },
     { key: 'status', label: 'Status' },
+    { key: 'dueDate', label: 'Repayment Due' },
     { key: 'invoiceDate', label: 'Date' },
   ];
 
   return (
-    <div className="p-6 space-y-6">
-      <div>
-        <h1 className="text-2xl font-bold text-gray-900">Transactions & Ledger</h1>
-        <p className="text-sm text-gray-500 mt-1">Invoice financing history, fees, and disbursements</p>
+    <div className="space-y-6">
+      <div className="overflow-hidden rounded-[32px] border border-white/70 bg-white/80 p-6 shadow-sm backdrop-blur sm:p-7">
+        <div className="flex flex-col gap-5 lg:flex-row lg:items-end lg:justify-between">
+          <div className="max-w-2xl">
+            <p className="text-[11px] uppercase tracking-[0.24em] text-slate-500">Transaction history</p>
+            <h1 className="mt-2 text-3xl font-semibold tracking-tight text-slate-900">Funding and repayment timeline</h1>
+            <p className="mt-3 text-sm leading-6 text-slate-500">
+              This view is customer-safe: it focuses on invoice value, the amount advanced to your business, repayment timing, and current status.
+            </p>
+          </div>
+          <button
+            onClick={handleDownload}
+            disabled={downloading}
+            className="inline-flex items-center justify-center gap-2 rounded-2xl bg-slate-950 px-5 py-3 text-sm font-medium text-white hover:bg-slate-800 disabled:opacity-60"
+          >
+            <Download className="h-4 w-4" />
+            {downloading ? 'Generating...' : 'Download statement'}
+          </button>
+        </div>
       </div>
 
-      {/* Summary Cards */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-        <div className="bg-white rounded-xl p-5 shadow-sm border border-gray-100">
-          <p className="text-sm text-gray-500">Total Disbursed</p>
-          <p className="text-2xl font-bold text-gray-900 mt-1">RM {totalDisbursed.toLocaleString()}</p>
+      <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-4">
+        <div className="rounded-[28px] border border-white/70 bg-white/88 p-5 shadow-sm backdrop-blur">
+          <div className="flex items-center justify-between">
+            <p className="text-sm text-slate-500">Total advanced</p>
+            <div className="rounded-2xl bg-blue-50 p-2.5 text-blue-600">
+              <CircleDollarSign className="h-5 w-5" />
+            </div>
+          </div>
+          <p className="mt-4 text-2xl font-semibold text-slate-900">RM {totalDisbursed.toLocaleString()}</p>
         </div>
-        <div className="bg-white rounded-xl p-5 shadow-sm border border-gray-100">
-          <p className="text-sm text-gray-500">Total Fees Earned</p>
-          <p className="text-2xl font-bold text-tng-gold mt-1">RM {totalFees.toLocaleString()}</p>
+        <div className="rounded-[28px] border border-white/70 bg-white/88 p-5 shadow-sm backdrop-blur">
+          <div className="flex items-center justify-between">
+            <p className="text-sm text-slate-500">Outstanding repayment</p>
+            <div className="rounded-2xl bg-amber-50 p-2.5 text-amber-600">
+              <Clock3 className="h-5 w-5" />
+            </div>
+          </div>
+          <p className="mt-4 text-2xl font-semibold text-slate-900">RM {pendingRepayments.toLocaleString()}</p>
         </div>
-        <div className="bg-white rounded-xl p-5 shadow-sm border border-gray-100">
-          <p className="text-sm text-gray-500">Pending Repayments</p>
-          <p className="text-2xl font-bold text-gray-900 mt-1">RM {pendingRepayments.toLocaleString()}</p>
+        <div className="rounded-[28px] border border-white/70 bg-white/88 p-5 shadow-sm backdrop-blur">
+          <div className="flex items-center justify-between">
+            <p className="text-sm text-slate-500">Settled invoices</p>
+            <div className="rounded-2xl bg-emerald-50 p-2.5 text-emerald-600">
+              <BadgeCheck className="h-5 w-5" />
+            </div>
+          </div>
+          <p className="mt-4 text-2xl font-semibold text-slate-900">{completedInvoices}</p>
+        </div>
+        <div className="rounded-[28px] border border-white/70 bg-white/88 p-5 shadow-sm backdrop-blur">
+          <div className="flex items-center justify-between">
+            <p className="text-sm text-slate-500">Average advance rate</p>
+            <div className="rounded-2xl bg-violet-50 p-2.5 text-violet-600">
+              <ReceiptText className="h-5 w-5" />
+            </div>
+          </div>
+          <p className="mt-4 text-2xl font-semibold text-slate-900">{averageAdvanceRate.toFixed(1)}%</p>
         </div>
       </div>
 
-      {/* Filters */}
-      <div className="bg-white rounded-xl p-5 shadow-sm border border-gray-100 space-y-4">
+      <div className="rounded-[32px] border border-white/70 bg-white/88 p-5 shadow-sm backdrop-blur space-y-4">
         <div className="flex flex-wrap items-center gap-4">
           <div className="flex items-center gap-2">
             <Filter className="w-4 h-4 text-gray-500" />
@@ -188,15 +227,14 @@ export default function Transactions() {
           </div>
         </div>
 
-        {/* Table */}
         <div className="overflow-x-auto">
           <table className="w-full text-sm">
-            <thead className="bg-gray-50 border-b border-gray-100">
+            <thead className="border-b border-slate-100 bg-slate-50/80">
               <tr>
                 {headers.map((h) => (
                   <th
                     key={h.key}
-                    className="px-4 py-3 text-left font-semibold text-gray-700 cursor-pointer hover:bg-gray-100 select-none"
+                    className="px-4 py-3 text-left font-semibold text-slate-700 cursor-pointer hover:bg-slate-100 select-none"
                     onClick={() => handleSort(h.key)}
                   >
                     <div className="flex items-center gap-1">
@@ -209,18 +247,18 @@ export default function Transactions() {
             </thead>
             <tbody>
               {filtered.map((row) => (
-                <tr key={row.invoiceId} className="border-b border-gray-50 hover:bg-gray-50/50 transition-colors">
-                  <td className="px-4 py-3 font-mono text-gray-600">{row.invoiceId}</td>
-                  <td className="px-4 py-3 font-medium text-gray-900">{row.vendorName}</td>
-                  <td className="px-4 py-3 text-gray-700">RM {row.amount.toLocaleString()}</td>
-                  <td className="px-4 py-3 text-gray-700">RM {row.factoringFee.toLocaleString()}</td>
-                  <td className="px-4 py-3 text-gray-700 font-medium">RM {row.netDisbursement.toLocaleString()}</td>
+                <tr key={row.invoiceId} className="border-b border-slate-50 transition-colors hover:bg-slate-50/60">
+                  <td className="px-4 py-4 font-mono text-slate-600">{row.invoiceId}</td>
+                  <td className="px-4 py-4 font-medium text-slate-900">{row.vendorName}</td>
+                  <td className="px-4 py-4 text-slate-700">RM {row.amount.toLocaleString()}</td>
+                  <td className="px-4 py-4 font-medium text-slate-900">RM {row.netDisbursement.toLocaleString()}</td>
                   <td className="px-4 py-3">
                     <span className={`inline-flex px-2.5 py-1 rounded-full text-xs font-medium ${statusColors[row.status] || 'bg-gray-50 text-gray-700'}`}>
                       {row.status.replace(/_/g, ' ')}
                     </span>
                   </td>
-                  <td className="px-4 py-3 text-gray-500">{row.invoiceDate}</td>
+                  <td className="px-4 py-4 text-slate-500">{row.dueDate}</td>
+                  <td className="px-4 py-4 text-slate-500">{row.invoiceDate}</td>
                 </tr>
               ))}
             </tbody>
@@ -242,16 +280,7 @@ export default function Transactions() {
           </div>
         )}
 
-        <div className="flex justify-end">
-          <button
-            onClick={handleDownload}
-            disabled={downloading}
-            className="flex items-center gap-2 px-5 py-2.5 bg-tng-blue text-white rounded-lg text-sm font-medium hover:bg-tng-blue-dark transition-colors disabled:opacity-60"
-          >
-            <Download className="w-4 h-4" />
-            {downloading ? 'Generating...' : 'Download Excel'}
-          </button>
-        </div>
+        <p className="text-xs text-slate-500">Platform revenue metrics are intentionally excluded from the SME portal to avoid cross-role leakage.</p>
       </div>
     </div>
   );

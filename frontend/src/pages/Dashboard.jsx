@@ -1,7 +1,18 @@
 import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
-  TrendingUp, FileText, Truck, Shield, Banknote, Zap, Clock, Activity, ArrowRight
+  TrendingUp,
+  FileText,
+  Truck,
+  Shield,
+  Banknote,
+  Zap,
+  Clock,
+  Activity,
+  ArrowRight,
+  Wallet,
+  CircleCheck,
+  ChevronRight,
 } from 'lucide-react';
 import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
 import KPICard from '../components/KPICard';
@@ -18,11 +29,11 @@ const mockCashFlow = [
 ];
 
 const mockActivities = [
-  { id: 'ACT-001', type: 'invoice_submitted', title: 'Invoice submitted for financing', detail: 'INV-98234 · Syarikat ABC Sdn Bhd · RM 15,000', time: '2 min ago', icon: FileText, color: 'bg-blue-50 text-blue-600' },
-  { id: 'ACT-002', type: 'funds_disbursed', title: 'Funds disbursed to wallet', detail: 'TXN-44512 · RM 23,000 net after fees', time: '15 min ago', icon: Banknote, color: 'bg-green-50 text-green-600' },
-  { id: 'ACT-003', type: 'shipment_update', title: 'Shipment cleared customs', detail: 'SHP-7781 · Port Klang → Singapore Port', time: '1 hr ago', icon: Truck, color: 'bg-amber-50 text-amber-600' },
-  { id: 'ACT-004', type: 'invoice_repaid', title: 'Invoice fully repaid', detail: 'INV-77102 · Mega Logistics · RM 25,000', time: '3 hrs ago', icon: Shield, color: 'bg-purple-50 text-purple-600' },
-  { id: 'ACT-005', type: 'credit_assessment', title: 'Credit limit reviewed', detail: 'New limit: RM 350,000 (+12%)', time: '5 hrs ago', icon: Zap, color: 'bg-tng-blue/10 text-tng-blue' },
+  { id: 'ACT-001', title: 'Invoice submitted for financing', detail: 'INV-98234 | Syarikat ABC Sdn Bhd | RM 15,000', time: '2 min ago', icon: FileText, color: 'bg-blue-50 text-blue-600' },
+  { id: 'ACT-002', title: 'Funds disbursed to your wallet', detail: 'TXN-44512 | RM 23,000 released to your business', time: '15 min ago', icon: Banknote, color: 'bg-green-50 text-green-600' },
+  { id: 'ACT-003', title: 'Shipment cleared customs', detail: 'SHP-7781 | Port Klang to Singapore Port', time: '1 hr ago', icon: Truck, color: 'bg-amber-50 text-amber-600' },
+  { id: 'ACT-004', title: 'Invoice fully repaid', detail: 'INV-77102 | Mega Logistics | RM 25,000', time: '3 hrs ago', icon: Shield, color: 'bg-purple-50 text-purple-600' },
+  { id: 'ACT-005', title: 'Credit line reviewed', detail: 'New line available: RM 350,000 (+12%)', time: '5 hrs ago', icon: Zap, color: 'bg-tng-blue/10 text-tng-blue' },
 ];
 
 export default function Dashboard() {
@@ -38,6 +49,12 @@ export default function Dashboard() {
   const [activeShipments] = useState(4);
   const [complianceScore] = useState(98);
   const [isLoadingKpis, setIsLoadingKpis] = useState(true);
+  const quickStats = [
+    { label: 'Active shipments', value: activeShipments, icon: Truck, tone: 'bg-blue-50 text-blue-600', action: () => navigate('/shipments') },
+    { label: 'Partner feed health', value: 'All online', icon: Activity, tone: 'bg-violet-50 text-violet-600', action: () => navigate('/architecture') },
+    { label: 'Compliance Score', value: `${complianceScore}%`, icon: Shield, tone: 'bg-green-50 text-green-600', action: () => navigate('/compliance') },
+    { label: 'Average processing time', value: '~2.3s', icon: Clock, tone: 'bg-amber-50 text-amber-600', action: () => navigate('/analytics') },
+  ];
 
   const userName = userProfile?.companyName?.split(' ')[0] || userProfile?.email?.split('@')[0] || 'User';
 
@@ -64,56 +81,107 @@ export default function Dashboard() {
   }, []);
 
   return (
-    <div className="p-6 space-y-6">
-      {/* Hero */}
-      <div className="bg-gradient-to-r from-tng-blue to-tng-blue-dark rounded-2xl p-6 text-white shadow-lg hover:shadow-xl transition-shadow">
-        <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
-          <div>
-            <h1 className="text-2xl font-bold">Welcome back, {userName}</h1>
-            <p className="text-white/80 mt-1">Your trade finance dashboard — instant cash for invoices & shipments.</p>
-            <div className="mt-3 flex items-center gap-2">
-              <span className="text-sm text-white/70">Available Credit Line:</span>
-              <span className="text-xl font-bold">RM {creditLimit.toLocaleString()}</span>
-              <span className="text-xs text-white/60 bg-white/10 px-2 py-1 rounded-full">Active</span>
+    <div className="space-y-4">
+      <div className="grid gap-4 2xl:grid-cols-[minmax(0,1.9fr)_minmax(280px,0.95fr)]">
+        <section className="overflow-hidden rounded-[32px] border border-white/60 bg-[linear-gradient(135deg,_#0c4c8e_0%,_#005ABB_45%,_#2a74c8_100%)] p-5 text-white shadow-[0_24px_80px_rgba(0,90,187,0.24)] sm:p-6">
+          <div className="flex flex-col gap-5 lg:flex-row lg:items-end lg:justify-between">
+            <div className="max-w-2xl">
+              <span className="inline-flex items-center gap-2 rounded-full bg-white/12 px-3 py-1 text-xs uppercase tracking-[0.24em] text-white/80">
+                <CircleCheck className="h-3.5 w-3.5" />
+                Funding overview
+              </span>
+              <h1 className="mt-3 text-2xl font-semibold tracking-tight sm:text-3xl">Welcome back, {userName}</h1>
+              <p className="mt-2 max-w-xl text-sm leading-6 text-white/78">
+                See what has been advanced to your business, what is pending next, and where to act without digging through multiple tabs.
+              </p>
+              <div className="mt-4 grid gap-3 sm:grid-cols-3">
+                <button onClick={() => navigate('/financing')} className="rounded-3xl border border-white/10 bg-white/10 p-4 text-left backdrop-blur-sm hover:bg-white/14">
+                  <p className="text-xs uppercase tracking-[0.2em] text-white/65">Credit line</p>
+                  <p className="mt-2 text-xl font-semibold">RM {creditLimit.toLocaleString()}</p>
+                </button>
+                <button onClick={() => navigate('/shipments')} className="rounded-3xl border border-white/10 bg-white/10 p-4 text-left backdrop-blur-sm hover:bg-white/14">
+                  <p className="text-xs uppercase tracking-[0.2em] text-white/65">Active shipments</p>
+                  <p className="mt-2 text-xl font-semibold">{activeShipments}</p>
+                </button>
+                <button onClick={() => navigate('/compliance')} className="rounded-3xl border border-white/10 bg-white/10 p-4 text-left backdrop-blur-sm hover:bg-white/14">
+                  <p className="text-xs uppercase tracking-[0.2em] text-white/65">Compliance Score</p>
+                  <p className="mt-2 text-xl font-semibold">{complianceScore}%</p>
+                </button>
+              </div>
+            </div>
+
+            <div className="grid gap-3 sm:min-w-0 lg:max-w-[260px]">
+              <button
+                onClick={() => navigate('/financing')}
+                className="flex items-center justify-between rounded-3xl border border-white/15 bg-white px-5 py-3.5 text-left text-tng-blue shadow-lg shadow-blue-950/15 hover:bg-slate-100"
+              >
+                <div>
+                  <p className="text-sm font-semibold">Start financing</p>
+                  <p className="mt-1 text-xs text-slate-500">Upload an invoice and receive an offer.</p>
+                </div>
+                <Banknote className="h-5 w-5" />
+              </button>
+              <button
+                onClick={() => navigate('/transactions')}
+                className="flex items-center justify-between rounded-3xl border border-white/15 bg-white/10 px-5 py-3.5 text-left text-white hover:bg-white/15"
+              >
+                <div>
+                  <p className="text-sm font-semibold">Review repayments</p>
+                  <p className="mt-1 text-xs text-white/70">Track funded and settled invoices.</p>
+                </div>
+                <ChevronRight className="h-5 w-5" />
+              </button>
             </div>
           </div>
-          <div className="flex gap-3">
-            <button
-              onClick={() => navigate('/financing')}
-              className="flex items-center gap-2 px-5 py-2.5 bg-white text-tng-blue rounded-lg text-sm font-semibold hover:bg-gray-100 transition-all hover:scale-105 shadow-sm"
-            >
-              <Banknote className="w-4 h-4" />
-              Finance an Invoice
-            </button>
-            <button
-              onClick={() => navigate('/shipments')}
-              className="flex items-center gap-2 px-5 py-2.5 bg-white/10 text-white rounded-lg text-sm font-semibold hover:bg-white/20 transition-all hover:scale-105 border border-white/20"
-            >
-              <Truck className="w-4 h-4" />
-              Track Shipment
-            </button>
+        </section>
+
+        <section className="rounded-[32px] border border-white/70 bg-white/85 p-5 shadow-sm backdrop-blur">
+          <div className="flex items-center justify-between">
+            <div>
+              <p className="text-[11px] uppercase tracking-[0.24em] text-slate-500">Today</p>
+              <h2 className="mt-1 text-lg font-semibold text-slate-900">What needs attention</h2>
+            </div>
+            <div className="rounded-2xl bg-emerald-50 px-3 py-2 text-xs font-medium text-emerald-700">Healthy</div>
           </div>
-        </div>
+          <div className="mt-4 grid gap-3 sm:grid-cols-3">
+            {[
+              { label: 'Offers ready to accept', value: '2', detail: 'Decision window closes in 24 hours', icon: Wallet, color: 'bg-blue-50 text-blue-600', action: () => navigate('/financing') },
+              { label: 'Invoices awaiting review', value: '1', detail: 'Uploaded today and queued for analysis', icon: FileText, color: 'bg-amber-50 text-amber-600', action: () => navigate('/transactions') },
+              { label: 'Upcoming repayment dates', value: '3', detail: 'All due within the next 14 days', icon: Clock, color: 'bg-emerald-50 text-emerald-600', action: () => navigate('/transactions') },
+            ].map((item) => (
+              <button key={item.label} onClick={item.action} className="rounded-3xl border border-slate-100 bg-slate-50/80 p-4 text-left transition-colors hover:bg-slate-50">
+                <div className={`flex h-10 w-10 items-center justify-center rounded-2xl ${item.color}`}>
+                  <item.icon className="h-4 w-4" />
+                </div>
+                <div className="mt-3 min-w-0">
+                  <div className="flex items-center justify-between gap-2">
+                    <p className="text-sm font-medium text-slate-900">{item.label}</p>
+                    <span className="text-base font-semibold text-slate-900">{item.value}</span>
+                  </div>
+                  <p className="mt-1 text-xs leading-5 text-slate-500">{item.detail}</p>
+                </div>
+              </button>
+            ))}
+          </div>
+        </section>
       </div>
 
-      {/* KPI Cards */}
       {isLoadingKpis ? (
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+        <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-4">
           {[1, 2, 3, 4].map((i) => (
-            <div key={i} className="bg-white rounded-xl p-6 shadow-sm border border-gray-100 animate-pulse">
-              <div className="h-10 bg-gray-200 rounded mb-2"></div>
-              <div className="h-8 bg-gray-200 rounded"></div>
-            </div>
+            <div key={i} className="h-36 rounded-[28px] border border-white/70 bg-white/80 animate-pulse" />
           ))}
         </div>
       ) : (
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+        <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-4">
           <KPICard
             icon={Banknote}
-            title="Total Financed"
+            title="Total Advanced To You"
             value={`RM ${(kpis.totalFinanced / 1000000).toFixed(1)}M`}
             trend={18.5}
             trendUp={true}
+            hint="Open transactions"
+            onClick={() => navigate('/transactions')}
           />
           <KPICard
             icon={FileText}
@@ -121,33 +189,40 @@ export default function Dashboard() {
             value={String(kpis.activeInvoices)}
             trend={1}
             trendUp={true}
+            hint="Continue financing"
+            onClick={() => navigate('/financing')}
           />
           <KPICard
             icon={TrendingUp}
-            title="Avg Factoring Rate"
+            title="Average Funding Cost"
             value={`${kpis.avgFactoringRate.toFixed(1)}%`}
             trend={0.3}
             trendUp={false}
+            hint="View analytics"
+            onClick={() => navigate('/analytics')}
           />
           <KPICard
             icon={Shield}
-            title="Repayment Rate"
+            title="Repayment Completion"
             value={`${kpis.repaymentRate.toFixed(1)}%`}
             trend={2.1}
             trendUp={true}
+            hint="Open compliance"
+            onClick={() => navigate('/compliance')}
           />
         </div>
       )}
 
-      {/* Main Content Grid */}
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        {/* Cash Flow Chart */}
-        <div className="lg:col-span-2 bg-white rounded-xl p-6 shadow-sm border border-gray-100">
-          <div className="flex items-center justify-between mb-4">
-            <h2 className="text-lg font-semibold text-gray-900">Cash Flow Overview</h2>
-            <span className="text-xs text-gray-500">Last 6 months</span>
+      <div className="grid grid-cols-1 gap-4 2xl:grid-cols-[minmax(0,1.9fr)_minmax(280px,0.95fr)]">
+        <section className="rounded-[32px] border border-white/70 bg-white/88 p-5 shadow-sm backdrop-blur">
+          <div className="mb-4 flex items-center justify-between gap-3">
+            <div>
+              <h2 className="text-lg font-semibold text-slate-900">Cash position over time</h2>
+              <p className="mt-1 text-sm text-slate-500">Disbursements received versus repayments and charges.</p>
+            </div>
+            <span className="rounded-full bg-slate-100 px-3 py-1 text-xs font-medium text-slate-600">Last 6 months</span>
           </div>
-          <ResponsiveContainer width="100%" height={260}>
+          <ResponsiveContainer width="100%" height={280}>
             <AreaChart data={mockCashFlow} margin={{ top: 5, right: 5, left: 0, bottom: 5 }}>
               <defs>
                 <linearGradient id="inflowGrad" x1="0" y1="0" x2="0" y2="1">
@@ -159,92 +234,67 @@ export default function Dashboard() {
                   <stop offset="95%" stopColor="#F5A623" stopOpacity={0} />
                 </linearGradient>
               </defs>
-              <CartesianGrid strokeDasharray="3 3" stroke="#f3f4f6" />
-              <XAxis dataKey="month" tick={{ fontSize: 12 }} />
-              <YAxis tick={{ fontSize: 12 }} tickFormatter={(v) => `RM${(v / 1000).toFixed(0)}k`} />
+              <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" vertical={false} />
+              <XAxis dataKey="month" tick={{ fontSize: 12, fill: '#64748b' }} axisLine={false} tickLine={false} />
+              <YAxis tick={{ fontSize: 12, fill: '#64748b' }} axisLine={false} tickLine={false} tickFormatter={(v) => `RM${(v / 1000).toFixed(0)}k`} />
               <Tooltip
-                contentStyle={{ borderRadius: 8, border: '1px solid #e5e7eb', fontSize: 12 }}
+                contentStyle={{ borderRadius: 16, border: '1px solid #e5e7eb', fontSize: 12 }}
                 formatter={(value) => [`RM ${Number(value).toLocaleString()}`, undefined]}
               />
-              <Area type="monotone" dataKey="inflow" stroke="#005ABB" strokeWidth={2} fill="url(#inflowGrad)" name="Disbursements" />
-              <Area type="monotone" dataKey="outflow" stroke="#F5A623" strokeWidth={2} fill="url(#outflowGrad)" name="Fees & Repayments" />
+              <Area type="monotone" dataKey="inflow" stroke="#005ABB" strokeWidth={2.5} fill="url(#inflowGrad)" name="Disbursements" />
+              <Area type="monotone" dataKey="outflow" stroke="#F5A623" strokeWidth={2.5} fill="url(#outflowGrad)" name="Repayments & charges" />
             </AreaChart>
           </ResponsiveContainer>
-        </div>
+        </section>
 
-        {/* Quick Stats */}
-        <div className="space-y-4">
-          <h2 className="text-lg font-semibold text-gray-900">Quick Stats</h2>
-          <div className="bg-white rounded-xl p-5 shadow-sm border border-gray-100 space-y-4">
-            <div className="flex items-center gap-3">
-              <div className="p-2.5 rounded-lg bg-blue-50">
-                <Truck className="w-5 h-5 text-blue-600" />
-              </div>
-              <div>
-                <p className="text-xs text-gray-500">Active Shipments</p>
-                <p className="text-lg font-bold text-gray-900">{activeShipments}</p>
-              </div>
-            </div>
-            <div className="w-full h-px bg-gray-100" />
-            <div className="flex items-center gap-3">
-              <div className="p-2.5 rounded-lg bg-purple-50">
-                <Activity className="w-5 h-5 text-purple-600" />
-              </div>
-              <div>
-                <p className="text-xs text-gray-500">Carrier API Status</p>
-                <p className="text-lg font-bold text-gray-900">All Online</p>
-              </div>
-            </div>
-            <div className="w-full h-px bg-gray-100" />
-            <div className="flex items-center gap-3">
-              <div className="p-2.5 rounded-lg bg-green-50">
-                <Shield className="w-5 h-5 text-green-600" />
-              </div>
-              <div>
-                <p className="text-xs text-gray-500">Compliance Score</p>
-                <p className="text-lg font-bold text-gray-900">{complianceScore}%</p>
-              </div>
-            </div>
-            <div className="w-full h-px bg-gray-100" />
-            <div className="flex items-center gap-3">
-              <div className="p-2.5 rounded-lg bg-amber-50">
-                <Clock className="w-5 h-5 text-amber-600" />
-              </div>
-              <div>
-                <p className="text-xs text-gray-500">Avg. Processing Time</p>
-                <p className="text-lg font-bold text-gray-900">~2.3s</p>
-              </div>
+        <section className="space-y-4">
+          <div className="rounded-[32px] border border-white/70 bg-white/88 p-5 shadow-sm backdrop-blur">
+            <h2 className="text-lg font-semibold text-slate-900">Quick stats</h2>
+            <div className="mt-5 space-y-4">
+              {quickStats.map((stat, index) => (
+                <div key={stat.label}>
+                  <button onClick={stat.action} className="flex w-full items-center gap-3 rounded-3xl p-1 text-left hover:bg-slate-50/80">
+                    <div className={`rounded-2xl p-3 ${stat.tone}`}>
+                      <stat.icon className="h-5 w-5" />
+                    </div>
+                    <div>
+                      <p className="text-xs uppercase tracking-[0.2em] text-slate-500">{stat.label}</p>
+                      <p className="text-lg font-semibold text-slate-900">{stat.value}</p>
+                    </div>
+                  </button>
+                  {index < quickStats.length - 1 && <div className="h-px bg-slate-100" />}
+                </div>
+              ))}
             </div>
           </div>
-        </div>
+        </section>
       </div>
 
-      {/* Recent Activity */}
-      <div className="bg-white rounded-xl p-6 shadow-sm border border-gray-100">
-        <div className="flex items-center justify-between mb-4">
-          <h2 className="text-lg font-semibold text-gray-900">Recent Activity</h2>
-          <button onClick={() => navigate('/transactions')} className="text-sm text-tng-blue font-medium hover:underline flex items-center gap-1">
-            View All <ArrowRight className="w-3.5 h-3.5" />
+      <section className="rounded-[32px] border border-white/70 bg-white/88 p-5 shadow-sm backdrop-blur">
+        <div className="mb-4 flex items-center justify-between gap-3">
+          <div>
+            <h2 className="text-lg font-semibold text-slate-900">Recent activity</h2>
+            <p className="mt-1 text-sm text-slate-500">A clean timeline of what changed across financing, shipments and compliance.</p>
+          </div>
+          <button onClick={() => navigate('/transactions')} className="inline-flex items-center gap-1 text-sm font-medium text-tng-blue hover:underline">
+            View all <ArrowRight className="h-3.5 w-3.5" />
           </button>
         </div>
-        <div className="space-y-3">
+        <div className="grid gap-3 lg:grid-cols-2">
           {mockActivities.map((act) => (
-            <div key={act.id} className="flex items-start gap-4 p-3 rounded-lg hover:bg-gray-50 transition-colors">
-              <div className={`p-2 rounded-lg ${act.color} mt-0.5`}>
-                <act.icon className="w-4 h-4" />
+            <button key={act.id} onClick={() => navigate(act.icon === Truck ? '/shipments' : '/transactions')} className="flex items-start gap-4 rounded-3xl border border-slate-100 bg-slate-50/70 p-4 text-left transition-colors hover:bg-slate-50">
+              <div className={`mt-0.5 rounded-2xl p-3 ${act.color}`}>
+                <act.icon className="h-4 w-4" />
               </div>
-              <div className="flex-1 min-w-0">
-                <p className="text-sm font-medium text-gray-900">{act.title}</p>
-                <p className="text-xs text-gray-500 mt-0.5">{act.detail}</p>
+              <div className="min-w-0 flex-1">
+                <p className="text-sm font-medium text-slate-900">{act.title}</p>
+                <p className="mt-1 text-xs text-slate-500">{act.detail}</p>
               </div>
-              <span className="text-xs text-gray-400 whitespace-nowrap flex items-center gap-1">
-                <Clock className="w-3 h-3" />
-                {act.time}
-              </span>
-            </div>
+              <span className="whitespace-nowrap text-xs text-slate-400">{act.time}</span>
+            </button>
           ))}
         </div>
-      </div>
+      </section>
     </div>
   );
 }

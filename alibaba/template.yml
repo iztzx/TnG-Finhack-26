@@ -1,0 +1,99 @@
+ROSTemplateFormatVersion: '2015-09-01'
+Transform: 'Aliyun::Serverless-2018-04-03'
+Description: TnG FinHack 26 - Alibaba Cloud Document Ingestion
+
+Parameters:
+  AwsWebhookUrl:
+    Type: String
+    Description: AWS API Gateway webhook endpoint for validated invoice payloads.
+  DashScopeApiKey:
+    Type: String
+    NoEcho: true
+    Description: Model Studio API key for image OCR requests.
+  DashScopeBaseUrl:
+    Type: String
+    Default: 'https://dashscope-intl.aliyuncs.com/compatible-mode/v1'
+    Description: OpenAI-compatible base URL for the Qwen OCR model.
+  DashScopeOcrModel:
+    Type: String
+    Default: 'qwen-vl-ocr'
+    Description: Alibaba Cloud OCR model name for JPG and PNG uploads.
+  DashScopeDocApiKey:
+    Type: String
+    NoEcho: true
+    Default: ''
+    Description: Optional dedicated Model Studio API key for PDF extraction. Leave blank to reuse DashScopeApiKey.
+  DashScopeDocBaseUrl:
+    Type: String
+    Default: 'https://dashscope.aliyuncs.com/compatible-mode/v1'
+    Description: OpenAI-compatible base URL for document extraction. Qwen-Doc-Turbo currently uses the China endpoint.
+  DashScopeDocModel:
+    Type: String
+    Default: 'qwen-doc-turbo'
+    Description: Alibaba Cloud document extraction model for PDF uploads.
+
+Resources:
+  InvoiceProcessingService:
+    Type: 'Aliyun::Serverless::Service'
+    Properties:
+      Description: Invoice ingestion and Model Studio extraction service
+      Role:
+        Fn::GetAtt: [FunctionComputeRole, Arn]
+      Policies:
+        - AliyunLogFullAccess
+      InternetAccess: true
+      LogConfig:
+        Project: tng-finhack-logs
+        Logstore: invoice-processing
+
+    InvoiceUploadFunction:
+      Type: 'Aliyun::Serverless::Function'
+      Properties:
+        Description: Receives invoice upload, extracts with Model Studio, forwards to AWS
+        Handler: index.handler
+        Runtime: python3.10
+        CodeUri: ./function-compute/invoice-upload/
+        MemorySize: 512
+        Timeout: 90
+        EnvironmentVariables:
+          AWS_WEBHOOK_URL:
+            Ref: AwsWebhookUrl
+          DASHSCOPE_API_KEY:
+            Ref: DashScopeApiKey
+          DASHSCOPE_BASE_URL:
+            Ref: DashScopeBaseUrl
+          DASHSCOPE_OCR_MODEL:
+            Ref: DashScopeOcrModel
+          DASHSCOPE_DOC_API_KEY:
+            Ref: DashScopeDocApiKey
+          DASHSCOPE_DOC_BASE_URL:
+            Ref: DashScopeDocBaseUrl
+          DASHSCOPE_DOC_MODEL:
+            Ref: DashScopeDocModel
+        Events:
+          httpTrigger:
+            Type: HTTP
+            Properties:
+              AuthType: ANONYMOUS
+              Methods: ['POST', 'OPTIONS']
+
+  # RAM Role for Function Compute
+  FunctionComputeRole:
+    Type: 'ALIYUN::RAM::Role'
+    Properties:
+      RoleName: TngFinHackFCRole
+      Description: Role for Function Compute to publish logs and invoke external APIs
+      AssumeRolePolicyDocument:
+        Version: '1'
+        Statement:
+          - Action: 'sts:AssumeRole'
+            Effect: Allow
+            Principal:
+              Service:
+                - fc.aliyuncs.com
+
+Outputs:
+  InvoiceUploadUrl:
+    Description: HTTP endpoint for invoice upload
+    Value:
+      Fn::GetAtt: [InvoiceProcessingService.InvoiceUploadFunction, HttpTriggerUrl]
