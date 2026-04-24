@@ -1,0 +1,7 @@
+version = 0.1
+[default.deploy.parameters]
+stack_name = "tng-finhack-26"
+resolve_s3 = true
+s3_prefix = "tng-finhack-26"
+region = "ap-southeast-1"
+capabilities = "CAPABILITY_IAM"

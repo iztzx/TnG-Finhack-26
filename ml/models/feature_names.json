@@ -1,0 +1,15 @@
+[
+  "monthly_txn_volume",
+  "avg_txn_size",
+  "business_tenure_months",
+  "iot_device_uptime_pct",
+  "payment_consistency_score",
+  "monthly_revenue",
+  "num_employees",
+  "industry_sector_fnb",
+  "industry_sector_logistics",
+  "industry_sector_manufacturing",
+  "industry_sector_retail",
+  "industry_sector_services",
+  "industry_sector_tech"
+]

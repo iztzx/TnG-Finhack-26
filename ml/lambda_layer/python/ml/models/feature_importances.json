@@ -1,0 +1,32 @@
+{
+  "classifier": {
+    "monthly_txn_volume": 0.1217276423375909,
+    "avg_txn_size": 0.11700742847701136,
+    "business_tenure_months": 0.18088588419093415,
+    "iot_device_uptime_pct": 0.11708140101247001,
+    "payment_consistency_score": 0.2180121508545331,
+    "monthly_revenue": 0.11969279214680556,
+    "num_employees": 0.08558387957825984,
+    "industry_sector_fnb": 0.009653705306958665,
+    "industry_sector_logistics": 0.007054706866691403,
+    "industry_sector_manufacturing": 0.0073307246002661365,
+    "industry_sector_retail": 0.005232305933315512,
+    "industry_sector_services": 0.005341040551639677,
+    "industry_sector_tech": 0.005396338143523685
+  },
+  "regressor": {
+    "monthly_txn_volume": 0.10866134506301581,
+    "avg_txn_size": 0.08829166484619455,
+    "business_tenure_months": 0.16634525778601078,
+    "iot_device_uptime_pct": 0.09734958023438459,
+    "payment_consistency_score": 0.18604662290621476,
+    "monthly_revenue": 0.25956425083308576,
+    "num_employees": 0.06628702762244183,
+    "industry_sector_fnb": 0.005312026947216512,
+    "industry_sector_logistics": 0.0038395658217967215,
+    "industry_sector_manufacturing": 0.0065047212823066474,
+    "industry_sector_retail": 0.0034586722527377178,
+    "industry_sector_services": 0.0052241802850642545,
+    "industry_sector_tech": 0.0031150841195300458
+  }
+}

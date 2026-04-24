@@ -1,0 +1,250 @@
+AWSTemplateFormatVersion: "2010-09-09"
+Transform: AWS::Serverless-2016-10-31
+Description: TnG FinHack 26 Backend Infrastructure
+
+Globals:
+  Api:
+    Cors:
+      AllowMethods: "'GET,POST,OPTIONS'"
+      AllowHeaders: "'Content-Type,X-Amz-Date,Authorization'"
+      AllowOrigin: "'*'"
+
+Parameters:
+  Environment:
+    Type: String
+    Default: dev
+    Description: Deployment environment
+
+Resources:
+  # DynamoDB Tables
+  TransactionsTable:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      TableName: tng-finhack-transactions
+      BillingMode: PAY_PER_REQUEST
+      AttributeDefinitions:
+        - AttributeName: userId
+          AttributeType: S
+        - AttributeName: timestamp
+          AttributeType: S
+      KeySchema:
+        - AttributeName: userId
+          KeyType: HASH
+        - AttributeName: timestamp
+          KeyType: RANGE
+      Tags:
+        - Key: Project
+          Value: TnG-FinHack-26
+
+  RiskScoresTable:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      TableName: tng-finhack-risk-scores
+      BillingMode: PAY_PER_REQUEST
+      AttributeDefinitions:
+        - AttributeName: userId
+          AttributeType: S
+      KeySchema:
+        - AttributeName: userId
+          KeyType: HASH
+      Tags:
+        - Key: Project
+          Value: TnG-FinHack-26
+
+  InvoicesTable:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      TableName: tng-finhack-invoices
+      BillingMode: PAY_PER_REQUEST
+      AttributeDefinitions:
+        - AttributeName: userId
+          AttributeType: S
+        - AttributeName: invoiceId
+          AttributeType: S
+      KeySchema:
+        - AttributeName: userId
+          KeyType: HASH
+        - AttributeName: invoiceId
+          KeyType: RANGE
+      Tags:
+        - Key: Project
+          Value: TnG-FinHack-26
+
+  # Lambda Execution Role
+  TngLambdaExecutionRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: !Sub "tng-finhack-lambda-role-${Environment}"
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: lambda.amazonaws.com
+            Action: sts:AssumeRole
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole
+      Policies:
+        - PolicyName: DynamoDBAccess
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              - Effect: Allow
+                Action:
+                  - dynamodb:PutItem
+                  - dynamodb:GetItem
+                  - dynamodb:Query
+                  - dynamodb:Scan
+                  - dynamodb:UpdateItem
+                  - dynamodb:DeleteItem
+                  - dynamodb:BatchWriteItem
+                Resource:
+                  - !GetAtt TransactionsTable.Arn
+                  - !GetAtt RiskScoresTable.Arn
+                  - !GetAtt InvoicesTable.Arn
+
+  # Lambda Functions
+  TngCreditScoringFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: tng-finhack-credit-scoring
+      Handler: handler.handler
+      Runtime: python3.12
+      CodeUri: lambda/credit-scoring/
+      MemorySize: 256
+      Timeout: 30
+      Role: !GetAtt TngLambdaExecutionRole.Arn
+      Environment:
+        Variables:
+          TXN_TABLE: !Ref TransactionsTable
+          RISK_TABLE: !Ref RiskScoresTable
+          INVOICE_TABLE: !Ref InvoicesTable
+      Events:
+        TriggerApi:
+          Type: Api
+          Properties:
+            RestApiId: !Ref TngFinHackApi
+            Path: /trigger
+            Method: POST
+        TransactionsApi:
+          Type: Api
+          Properties:
+            RestApiId: !Ref TngFinHackApi
+            Path: /transactions/{userId}
+            Method: GET
+        TelemetryApi:
+          Type: Api
+          Properties:
+            RestApiId: !Ref TngFinHackApi
+            Path: /telemetry/latest
+            Method: GET
+        InvoiceUploadApi:
+          Type: Api
+          Properties:
+            RestApiId: !Ref TngFinHackApi
+            Path: /invoice/upload
+            Method: POST
+        InvoiceAnalyzeApi:
+          Type: Api
+          Properties:
+            RestApiId: !Ref TngFinHackApi
+            Path: /invoice/analyze
+            Method: POST
+        InvoiceOfferApi:
+          Type: Api
+          Properties:
+            RestApiId: !Ref TngFinHackApi
+            Path: /invoice/offer
+            Method: POST
+        InvoiceAcceptApi:
+          Type: Api
+          Properties:
+            RestApiId: !Ref TngFinHackApi
+            Path: /invoice/accept
+            Method: POST
+        ListInvoicesApi:
+          Type: Api
+          Properties:
+            RestApiId: !Ref TngFinHackApi
+            Path: /invoices/{userId}
+            Method: GET
+        ShipmentTrackApi:
+          Type: Api
+          Properties:
+            RestApiId: !Ref TngFinHackApi
+            Path: /shipment/track
+            Method: POST
+        ShipmentVerifyApi:
+          Type: Api
+          Properties:
+            RestApiId: !Ref TngFinHackApi
+            Path: /shipment/verify
+            Method: POST
+        AnalyticsApi:
+          Type: Api
+          Properties:
+            RestApiId: !Ref TngFinHackApi
+            Path: /analytics/{userId}
+            Method: GET
+
+  TngExcelReconciliationFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: tng-finhack-excel-reconciliation
+      Handler: handler.handler
+      Runtime: python3.12
+      CodeUri: lambda/excel-reconciliation/
+      MemorySize: 512
+      Timeout: 30
+      Role: !GetAtt TngLambdaExecutionRole.Arn
+      Environment:
+        Variables:
+          TXN_TABLE: !Ref TransactionsTable
+          RISK_TABLE: !Ref RiskScoresTable
+      Layers:
+        - !Ref OpenPyxlLayer
+      Events:
+        ReconciliationApi:
+          Type: Api
+          Properties:
+            RestApiId: !Ref TngFinHackApi
+            Path: /reconciliation/download
+            Method: GET
+
+  # Lambda Layer for openpyxl
+  OpenPyxlLayer:
+    Type: AWS::Serverless::LayerVersion
+    Properties:
+      LayerName: tng-finhack-openpyxl
+      Description: openpyxl library for Excel generation
+      ContentUri: lambda/excel-reconciliation/
+      CompatibleRuntimes:
+        - python3.12
+      RetentionPolicy: Retain
+
+  # API Gateway
+  TngFinHackApi:
+    Type: AWS::Serverless::Api
+    Properties:
+      Name: tng-finhack-api
+      StageName: !Ref Environment
+      Cors:
+        AllowMethods: "'GET,POST,OPTIONS'"
+        AllowHeaders: "'Content-Type,X-Amz-Date,Authorization'"
+        AllowOrigin: "'*'"
+      Auth:
+        DefaultAuthorizer: NONE
+
+Outputs:
+  ApiUrl:
+    Description: API Gateway endpoint URL
+    Value: !Sub "https://${TngFinHackApi}.execute-api.${AWS::Region}.amazonaws.com/${Environment}/"
+  TransactionsTableName:
+    Description: DynamoDB Transactions Table
+    Value: !Ref TransactionsTable
+  RiskScoresTableName:
+    Description: DynamoDB Risk Scores Table
+    Value: !Ref RiskScoresTable
+  InvoicesTableName:
+    Description: DynamoDB Invoices Table
+    Value: !Ref InvoicesTable
