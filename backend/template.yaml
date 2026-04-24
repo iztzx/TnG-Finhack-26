@@ -16,36 +16,17 @@ Parameters:
     Description: Deployment environment
 
 Resources:
-  # DynamoDB Tables
-  TransactionsTable:
+  # DynamoDB Tables (Contract-compliant: id as partition key)
+  UsersTable:
     Type: AWS::DynamoDB::Table
     Properties:
-      TableName: tng-finhack-transactions
+      TableName: tng-finhack-users
       BillingMode: PAY_PER_REQUEST
       AttributeDefinitions:
-        - AttributeName: userId
-          AttributeType: S
-        - AttributeName: timestamp
+        - AttributeName: id
           AttributeType: S
       KeySchema:
-        - AttributeName: userId
-          KeyType: HASH
-        - AttributeName: timestamp
-          KeyType: RANGE
-      Tags:
-        - Key: Project
-          Value: TnG-FinHack-26
-
-  RiskScoresTable:
-    Type: AWS::DynamoDB::Table
-    Properties:
-      TableName: tng-finhack-risk-scores
-      BillingMode: PAY_PER_REQUEST
-      AttributeDefinitions:
-        - AttributeName: userId
-          AttributeType: S
-      KeySchema:
-        - AttributeName: userId
+        - AttributeName: id
           KeyType: HASH
       Tags:
         - Key: Project
@@ -57,15 +38,63 @@ Resources:
       TableName: tng-finhack-invoices
       BillingMode: PAY_PER_REQUEST
       AttributeDefinitions:
-        - AttributeName: userId
-          AttributeType: S
-        - AttributeName: invoiceId
+        - AttributeName: id
           AttributeType: S
       KeySchema:
-        - AttributeName: userId
+        - AttributeName: id
           KeyType: HASH
-        - AttributeName: invoiceId
-          KeyType: RANGE
+      Tags:
+        - Key: Project
+          Value: TnG-FinHack-26
+
+  OffersTable:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      TableName: tng-finhack-offers
+      BillingMode: PAY_PER_REQUEST
+      AttributeDefinitions:
+        - AttributeName: id
+          AttributeType: S
+      KeySchema:
+        - AttributeName: id
+          KeyType: HASH
+      Tags:
+        - Key: Project
+          Value: TnG-FinHack-26
+
+  TransactionsTable:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      TableName: tng-finhack-transactions
+      BillingMode: PAY_PER_REQUEST
+      AttributeDefinitions:
+        - AttributeName: id
+          AttributeType: S
+      KeySchema:
+        - AttributeName: id
+          KeyType: HASH
+      Tags:
+        - Key: Project
+          Value: TnG-FinHack-26
+
+  # S3 Bucket for Invoice Uploads
+  InvoiceUploadsBucket:
+    Type: AWS::S3::Bucket
+    Properties:
+      BucketName: !Sub "tng-finhack-invoice-uploads-${AWS::AccountId}"
+      CorsConfiguration:
+        CorsRules:
+          - AllowedOrigins:
+              - "*"
+            AllowedMethods:
+              - GET
+              - POST
+              - PUT
+              - DELETE
+              - HEAD
+            AllowedHeaders:
+              - "*"
+            MaxAge: 3600
       Tags:
         - Key: Project
           Value: TnG-FinHack-26
@@ -99,9 +128,23 @@ Resources:
                   - dynamodb:DeleteItem
                   - dynamodb:BatchWriteItem
                 Resource:
-                  - !GetAtt TransactionsTable.Arn
-                  - !GetAtt RiskScoresTable.Arn
+                  - !GetAtt UsersTable.Arn
                   - !GetAtt InvoicesTable.Arn
+                  - !GetAtt OffersTable.Arn
+                  - !GetAtt TransactionsTable.Arn
+        - PolicyName: S3Access
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              - Effect: Allow
+                Action:
+                  - s3:PutObject
+                  - s3:GetObject
+                  - s3:DeleteObject
+                  - s3:ListBucket
+                Resource:
+                  - !GetAtt InvoiceUploadsBucket.Arn
+                  - !Sub "${InvoiceUploadsBucket.Arn}/*"
 
   # Lambda Functions
   TngCreditScoringFunction:
