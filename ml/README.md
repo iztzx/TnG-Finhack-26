@@ -31,7 +31,7 @@ Creates `data/synthetic_sme_data.csv` with 2000+ Malaysian SME credit records.
 | `monthly_txn_volume` | 5 – 500 | Number of transactions per month |
 | `avg_txn_size` | 50 – 50,000 RM | Average transaction value |
 | `business_tenure_months` | 1 – 240 | How long the business has operated |
-| `iot_device_uptime_pct` | 0 – 100 | IoT device availability |
+| `tracking_reliability_pct` | 0 – 100 | Satellite & carrier API tracking reliability |
 | `payment_consistency_score` | 0.0 – 1.0 | On-time payment ratio |
 | `industry_sector` | categorical | retail, fnb, services, manufacturing, logistics, tech |
 | `monthly_revenue` | 1,000 – 500,000 RM | Monthly revenue |
@@ -83,7 +83,7 @@ result = score_user({
     "monthly_txn_volume": 200,
     "avg_txn_size": 12000.0,
     "business_tenure_months": 60,
-    "iot_device_uptime_pct": 98.0,
+    "tracking_reliability_pct": 98.0,
     "payment_consistency_score": 0.92,
     "industry_sector": "tech",
     "monthly_revenue": 150000.0,

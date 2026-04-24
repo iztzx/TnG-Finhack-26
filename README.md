@@ -16,8 +16,8 @@ The TnG Logistics Finance Platform is a fintech solution that revolutionizes sup
 - ⚡ **Instant Invoice Financing** - Quick credit against shipments and invoices (support for export financing)
 - 🤖 **Supply Chain AI** - ML models trained on shipment data, customs clearance, and logistics patterns
 - 📊 **Live Logistics Dashboard** - Real-time KPI tracking for shipments, routes, and credit portfolio
-- 🔌 **IoT Sensor Integration** - Temperature, humidity, battery, and signal monitoring for cargo integrity
-- 🌐 **Multi-Carrier Support** - Maersk, DHL, FedEx, CMA CGM, and local Malaysia carriers
+- 🛰️ **Satellite Imagery Monitoring** - Visual cargo verification and location tracking via satellite feeds
+- 🌐 **Multi-Carrier Support** - Maersk, DHL, FedEx, CMA CGM, and local Malaysia carriers with API integration
 - 📱 **WebSocket Live Updates** - Real-time shipment status and transaction feeds
 
 ---
@@ -35,7 +35,7 @@ Traditional hire-purchase (HITA) underwriting focuses on:
 
 ### Our Solution: Route-Based Underwriting
 
-✅ **Real collateral visibility** - IoT tracking confirms cargo exists and value
+✅ **Real collateral visibility** - Satellite imagery and carrier API tracking confirms cargo exists and value
 ✅ **Faster approval** - Route AI scoring in <100ms
 ✅ **Lower default risk** - Shipment completion is objective, measurable
 ✅ **Better economics** - Finance the shipment, not the business owner
@@ -49,7 +49,7 @@ Traditional hire-purchase (HITA) underwriting focuses on:
 | **Underwriting** | Business owner focus | Route-based, shipment-centric |
 | **Approval Speed** | Days | Minutes (via AI) |
 | **Regional Focus** | Global | Southeast Asia (optimized) |
-| **GPS Integration** | Optional partner | Native, mandatory |
+| **GPS Integration** | Optional partner | Carrier API + Satellite |
 | **Regulatory** | Complex cross-border | Malaysia-centric compliance |
 | **Target Market** | Large exporters | SME exporters & importers |
 
@@ -105,7 +105,6 @@ TnG-Finhack-26/
 │   ├── src/
 │   │   ├── components/         # Reusable UI components
 │   │   │   ├── TransactionTable.jsx    # Invoice/shipment financing table
-│   │   │   ├── IoTPanel.jsx            # Shipment sensor data display
 │   │   │   ├── RiskGauge.jsx           # Route risk visualization
 │   │   │   └── ...
 │   │   ├── pages/              # Page components
@@ -152,14 +151,7 @@ TnG-Finhack-26/
 │   │   └── synthetic_sme_data.csv  # 10k+ shipment records
 │   └── requirements.txt
 │
-├── iot/                         # IoT and real-time server
-│   ├── local_ws_server.py      # WebSocket server for live updates
-│   ├── simulator.py            # IoT device/shipment simulator
-│   ├── auth.py                 # Authentication helpers
-│   ├── config.py               # Configuration
-│   ├── setup_alibaba.py        # Alibaba IoT Hub setup (optional)
-│   └── requirements.txt
-│
+
 └── docs/                        # Documentation
     ├── demo-script.md          # 3.5-min demo walkthrough
     └── qa-prep.md              # Testing guide
@@ -188,21 +180,6 @@ npm run dev
 ```
 
 Dashboard available at `http://localhost:5173` — shows shipment tracking, financing offers, and live route analytics.
-
-#### 2. **IoT Server Setup** (Required for live tracking)
-
-```bash
-cd iot
-pip install -r requirements.txt
-
-# Terminal 1: Start WebSocket server for real-time updates
-python local_ws_server.py
-
-# Terminal 2: Start shipment simulator (generates mock IoT data)
-python simulator.py
-```
-
-This simulates real-time GPS and sensor data for shipments in transit.
 
 #### 3. **Backend Setup (AWS Lambda)**
 
@@ -356,44 +333,47 @@ The model assesses **shipment route risk** based on:
 Unlike traditional HITA models that assess business owner creditworthiness, we assess **shipment collateral quality**:
 
 ✅ **Route Risk** is predictable and data-driven  
-✅ **IoT sensors** provide real-time cargo monitoring  
+✅ **Satellite imagery** provides visual cargo verification  
+✅ **Carrier APIs** provide real-time location and status updates  
 ✅ **Customs patterns** are verifiable and historical  
 ✅ **Carrier performance** is measurable  
 ✅ **Shipment itself** is the collateral (cargo stays tracked)
 
 ---
 
-## � GPS Integration & Real-Time Tracking
+## 🛰️ Satellite Imagery & Shipping Partner API Integration
 
 ### Supported Platforms
 
-- **GPS Tracking APIs** from shipping partners
-- **MQTT Protocol** for device telemetry
+- **Carrier Tracking APIs** from shipping partners (Maersk, DHL, FedEx, CMA CGM)
+- **Satellite Imagery Services** for visual cargo verification
 - **WebSocket** for browser real-time updates
-- **Satellite Imagery** for visual confirmation of cargo
+- **Port Authority APIs** for customs and clearance status
 
 ### Shipment Monitoring Features
 
-✅ **Real-time GPS Tracking**
-- Continuous location updates as shipments move through Malaysia-Singapore-Thailand corridor
+✅ **Real-time Location Tracking**
+- Continuous location updates via carrier APIs as shipments move through Malaysia-Singapore-Thailand corridor
 - Waypoint recording at ports, checkpoints, and warehouses
+- Integration with carrier tracking systems for accurate positioning
 
-✅ **Environmental Sensors**
-- Temperature monitoring (critical for perishables, pharmaceuticals)
-- Humidity tracking (prevents cargo damage)
-- Battery & signal strength (device health)
-- Alerts on sensor anomalies
+✅ **Satellite Imagery Verification**
+- Visual confirmation of cargo at key waypoints
+- Container identification and verification
+- Port congestion monitoring
+- Weather and route condition assessment
 
 ✅ **Customs & Border Events**
-- Automatic recording of port arrivals/departures
+- Automatic recording of port arrivals/departures via port authority APIs
 - Customs clearance status (CLEARED, PENDING_INSPECTION, HOLD)
 - Document validation timestamps
 - Automated alerts on delays
 
 ✅ **Carrier Integration**
 - Real-time carrier updates (Maersk, DHL, FedEx, CMA CGM, local carriers)
-- Integration with carrier APIs for status
+- Direct API integration with carrier systems for status
 - ETA updates based on live tracking
+- Automated status synchronization
 
 ### Regional Coverage
 
@@ -403,13 +383,10 @@ Unlike traditional HITA models that assess business owner creditworthiness, we a
 - Johor Bahru (Malaysia) ↔ Singapore ↔ Manila (Philippines)
 - Kota Kinabalu (Sabah) ↔ Regional ports
 
-### IoT Configuration
+### Configuration
 
-Edit `iot/config.py` for:
-- GPS update frequency (default: 5-min intervals)
-- Sensor reading cadence
-- Alibaba IoT credentials (for China routes)
-- Alert thresholds (temp, humidity, delays)
+Carrier API credentials and satellite imagery service configuration are managed through environment variables and the backend configuration system.
+
 
 ---
 
@@ -434,10 +411,10 @@ npm run preview
 ```
 
 **Key Pages to Modify:**
-- `pages/Shipments.jsx` - Add new route visualization
+- `pages/Shipments.jsx` - Add new route visualization and satellite imagery display
 - `pages/Financing.jsx` - Adjust financing terms UI
 - `components/RiskGauge.jsx` - Update risk visualization
-- `hooks/useWebSocket.js` - Handle new real-time data types
+- `hooks/useWebSocket.js` - Handle carrier API updates and real-time data
 
 **Frontend Stack:**
 - React 19 with functional components & hooks
@@ -465,8 +442,8 @@ sam deploy
 ```
 
 **Key Lambda Functions to Modify:**
-- `handle_shipment_track()` - Parse GPS and cargo data
-- `handle_shipment_verify()` - Validate sensor readings
+- `handle_shipment_track()` - Parse carrier API data and satellite imagery
+- `handle_shipment_verify()` - Validate shipment status via carrier APIs
 - `handle_invoice_analyze()` - Route-based risk assessment
 - `handle_invoice_offer()` - Generate financing terms
 
@@ -520,9 +497,10 @@ The project includes a **synthetic supply chain dataset** (`ml/data/synthetic_sm
 
 **Note:** This is synthetically generated data. In production:
 - Integrate with actual port APIs (Port Klang, Singapore, Bangkok, Manila)
-- Connect with carrier APIs for real tracking
+- Connect with carrier APIs for real tracking (Maersk, DHL, FedEx, CMA CGM)
 - Use actual customs clearance records
-- Implement real shipping partner GPS webhooks
+- Implement satellite imagery services for cargo verification
+- Integrate shipping partner API webhooks for real-time updates
 
 ---
 
@@ -533,6 +511,8 @@ The project includes a **synthetic supply chain dataset** (`ml/data/synthetic_sm
 ✅ **Authentication**
 - WebSocket authentication tokens for real-time feeds
 - AWS IAM roles and policies for Lambda
+- Carrier API authentication and credential management
+- Satellite imagery service API keys
 - Environment-based credential management
 
 ✅ **Data Protection**
@@ -621,27 +601,22 @@ VITE_REQUEST_TIMEOUT=15000
    - Configure custom domain with ACM certificate
    - Enable WAF for API protection
 
-5. **IoT Setup:**
-   - Configure Alibaba IoT Hub or AWS IoT Core
-   - Register shipment IoT devices
-   - Set up MQTT endpoints
-   - Configure topic subscriptions
+5. **Carrier & Satellite Integration:**
+   - Configure carrier API credentials (Maersk, DHL, FedEx, CMA CGM)
+   - Set up satellite imagery service API keys
+   - Configure webhook endpoints for carrier status updates
+   - Set up port authority API integrations
 
 ### Local Development Deployment
 
 For rapid iteration and testing:
 
 ```bash
-# Terminal 1: IoT server with simulator
-cd iot
-python local_ws_server.py &
-python simulator.py
-
-# Terminal 2: Backend (local Lambda)
+# Terminal 1: Backend (local Lambda)
 cd backend
 sam local start-api
 
-# Terminal 3: Frontend dev server
+# Terminal 2: Frontend dev server
 cd frontend
 npm run dev
 ```
@@ -745,9 +720,9 @@ See [demo-script.md](docs/demo-script.md) for:
 - Concurrent execution limits: 1,000+
 - Reserved capacity for peak shipping seasons
 
-**IoT & Real-Time:**
-- MQTT broker clustering for 10k+ devices
-- WebSocket connection pooling
+**Real-Time Integration:**
+- WebSocket connection pooling for carrier updates
+- Carrier API rate limiting and caching
 - Message deduplication to reduce noise
 
 **Database:**
@@ -759,7 +734,8 @@ See [demo-script.md](docs/demo-script.md) for:
 
 - **Customs delays**: Pre-fetch clearance status before shipment arrives
 - **Port congestion**: Integrate port APIs for real-time capacity
-- **Sensor lag**: Batch IoT updates, cache locally
+- **Carrier API limits**: Implement caching and rate limiting strategies
+- **Satellite imagery**: Cache recent imagery, batch requests
 - **Model latency**: Cache route risk scores (valid 24h)
 
 ---
@@ -784,7 +760,7 @@ See [demo-script.md](docs/demo-script.md) for:
 
 ### Shipment Tracking Not Updating
 
-**Problem:** Shipments stuck at same location, not receiving GPS updates
+**Problem:** Shipments stuck at same location, not receiving updates
 
 **Solutions:**
 1. Verify WebSocket connection:
@@ -792,7 +768,9 @@ See [demo-script.md](docs/demo-script.md) for:
    wscat -c ws://localhost:8000/ws
    # Should print "[connected]"
    ```
-2. Check GPS mocks in network tab3. Check browser console for parsing errors
+2. Check carrier API credentials and rate limits
+3. Verify satellite imagery service is accessible
+4. Check browser console for parsing errors
 
 ### Model Training Crashes
 
@@ -840,12 +818,14 @@ This project is part of the TnG FinHack 26 competition.
 
 **Phase 1 (Current - MVP):**
 - ✅ Route-based risk scoring
-- ✅ Real-time shipment tracking
+- ✅ Real-time shipment tracking via carrier APIs
 - ✅ Invoice financing (offer/acceptance)
-- ✅ satellite imagery monitoring
+- ✅ Satellite imagery monitoring
 
 **Phase 2 (Q3 2026):**
 - [ ] Production ML model with real shipment data
+- [ ] Enhanced carrier API integrations (more carriers)
+- [ ] Advanced satellite imagery analysis (AI-powered)
 - [ ] Integration with BNM (Bank Negara Malaysia) APIs
 - [ ] Multiple currency support (SGD, THB, PHP, USD)
 - [ ] Automated customs clearance prediction

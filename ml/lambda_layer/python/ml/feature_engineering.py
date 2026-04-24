@@ -12,7 +12,7 @@ DEFAULTS = {
     "monthly_txn_volume": 50,
     "avg_txn_size": 2500.0,
     "business_tenure_months": 36,
-    "iot_device_uptime_pct": 95.0,
+    "tracking_reliability_pct": 95.0,
     "payment_consistency_score": 0.75,
     "monthly_revenue": 25000.0,
     "num_employees": 10,
@@ -46,8 +46,8 @@ def extract_features(user_data: dict) -> dict:
     features["business_tenure_months"] = _to_int(
         user_data.get("business_tenure_months"), DEFAULTS["business_tenure_months"], 1, 240
     )
-    features["iot_device_uptime_pct"] = _to_float(
-        user_data.get("iot_device_uptime_pct"), DEFAULTS["iot_device_uptime_pct"], 0.0, 100.0
+    features["tracking_reliability_pct"] = _to_float(
+        user_data.get("tracking_reliability_pct"), DEFAULTS["tracking_reliability_pct"], 0.0, 100.0
     )
     features["payment_consistency_score"] = _to_float(
         user_data.get("payment_consistency_score"), DEFAULTS["payment_consistency_score"], 0.0, 1.0

@@ -10,7 +10,7 @@ N = 2000
 monthly_txn_volume = np.random.randint(5, 501, size=N)
 avg_txn_size = np.random.uniform(50, 50000, size=N)
 business_tenure_months = np.random.randint(1, 241, size=N)
-iot_device_uptime_pct = np.clip(np.random.normal(92, 8, size=N), 0, 100)
+tracking_reliability_pct = np.clip(np.random.normal(92, 8, size=N), 0, 100)
 payment_consistency_score = np.clip(np.random.beta(3, 2, size=N), 0, 1)
 industry_sector = np.random.choice(
     ['retail', 'fnb', 'services', 'manufacturing', 'logistics', 'tech'],
@@ -30,7 +30,7 @@ monthly_revenue = np.clip(
 # Normalize features to 0-1 for composite
 txn_vol_norm = (monthly_txn_volume - 5) / 495
 tenure_norm = business_tenure_months / 240
-uptime_norm = iot_device_uptime_pct / 100
+tracking_norm = tracking_reliability_pct / 100
 consistency_norm = payment_consistency_score
 revenue_norm = (monthly_revenue - 1000) / 499000
 employees_norm = (num_employees - 1) / 199
@@ -51,7 +51,7 @@ composite = (
     0.20 * tenure_norm +
     0.15 * txn_vol_norm +
     0.15 * revenue_norm +
-    0.10 * uptime_norm +
+    0.10 * tracking_norm +
     0.05 * employees_norm +
     0.10 * sector_score
 )
@@ -106,7 +106,7 @@ df = pd.DataFrame({
     'monthly_txn_volume': monthly_txn_volume,
     'avg_txn_size': np.round(avg_txn_size, 2),
     'business_tenure_months': business_tenure_months,
-    'iot_device_uptime_pct': np.round(iot_device_uptime_pct, 2),
+    'tracking_reliability_pct': np.round(tracking_reliability_pct, 2),
     'payment_consistency_score': np.round(payment_consistency_score, 4),
     'industry_sector': industry_sector,
     'monthly_revenue': np.round(monthly_revenue, 2),

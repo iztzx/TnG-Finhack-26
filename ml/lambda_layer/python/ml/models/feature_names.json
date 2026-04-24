@@ -2,7 +2,7 @@
   "monthly_txn_volume",
   "avg_txn_size",
   "business_tenure_months",
-  "iot_device_uptime_pct",
+  "tracking_reliability_pct",
   "payment_consistency_score",
   "monthly_revenue",
   "num_employees",

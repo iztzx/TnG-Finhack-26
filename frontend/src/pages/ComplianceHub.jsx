@@ -6,7 +6,7 @@ const auditTrail = [
   { id: 'AUD-002', action: 'Invoice uploaded for financing', user: 'system', timestamp: '2026-04-24 14:28:15', severity: 'Info' },
   { id: 'AUD-003', action: 'Credit score updated via ML model', user: 'system', timestamp: '2026-04-24 14:28:16', severity: 'Info' },
   { id: 'AUD-004', action: 'Data export initiated', user: 'analyst@tng.com', timestamp: '2026-04-24 14:15:00', severity: 'Warning' },
-  { id: 'AUD-005', action: 'IoT device disconnected', user: 'system', timestamp: '2026-04-24 13:45:22', severity: 'Warning' },
+  { id: 'AUD-005', action: 'Carrier API sync completed', user: 'system', timestamp: '2026-04-24 13:45:22', severity: 'Info' },
   { id: 'AUD-006', action: 'Policy configuration changed', user: 'admin@tng.com', timestamp: '2026-04-24 12:00:00', severity: 'Critical' },
 ];
 

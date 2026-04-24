@@ -127,7 +127,7 @@ if __name__ == "__main__":
         "monthly_txn_volume": 200,
         "avg_txn_size": 12000.0,
         "business_tenure_months": 60,
-        "iot_device_uptime_pct": 98.0,
+        "tracking_reliability_pct": 98.0,
         "payment_consistency_score": 0.92,
         "industry_sector": "tech",
         "monthly_revenue": 150000.0,

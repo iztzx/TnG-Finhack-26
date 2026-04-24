@@ -258,13 +258,13 @@ export const verifyShipment = async (shipmentId, shipmentValue = 50000) => {
       advanceRate: 0.85,
       shipmentValue,
       riskAssessment: {
-        iotDeviceStatus: 'ONLINE',
-        iotSignalStrength: -65,
+        carrierApiStatus: 'CONNECTED',
+        satelliteImageryAvailable: true,
         customsClearance: 'CLEARED',
         carrierVerification: 'VERIFIED',
         deliveryConfirmation: true,
-        temperatureIntegrity: 'PASS',
-        sealIntegrity: 'PASS',
+        routeIntegrity: 'VERIFIED',
+        locationAccuracy: 'HIGH',
       },
     };
   }

@@ -6,6 +6,7 @@ import {
 import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
 import KPICard from '../components/KPICard';
 import { getAnalytics } from '../lib/api';
+import { useAuth } from '../context/AuthContext';
 
 const mockCashFlow = [
   { month: 'Nov', inflow: 45000, outflow: 12000 },
@@ -26,6 +27,7 @@ const mockActivities = [
 
 export default function Dashboard() {
   const navigate = useNavigate();
+  const { userProfile } = useAuth();
   const [kpis, setKpis] = useState({
     totalFinanced: 368000,
     activeInvoices: 3,
@@ -34,11 +36,14 @@ export default function Dashboard() {
   });
   const [creditLimit] = useState(350000);
   const [activeShipments] = useState(4);
-  const [iotDevices] = useState(12);
   const [complianceScore] = useState(98);
+  const [isLoadingKpis, setIsLoadingKpis] = useState(true);
+
+  const userName = userProfile?.companyName?.split(' ')[0] || userProfile?.email?.split('@')[0] || 'User';
 
   useEffect(() => {
     async function load() {
+      setIsLoadingKpis(true);
       try {
         const analytics = await getAnalytics();
         if (analytics) {
@@ -51,6 +56,8 @@ export default function Dashboard() {
         }
       } catch {
         // keep defaults
+      } finally {
+        setIsLoadingKpis(false);
       }
     }
     load();
@@ -59,27 +66,28 @@ export default function Dashboard() {
   return (
     <div className="p-6 space-y-6">
       {/* Hero */}
-      <div className="bg-gradient-to-r from-tng-blue to-tng-blue-dark rounded-2xl p-6 text-white shadow-lg">
+      <div className="bg-gradient-to-r from-tng-blue to-tng-blue-dark rounded-2xl p-6 text-white shadow-lg hover:shadow-xl transition-shadow">
         <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
           <div>
-            <h1 className="text-2xl font-bold">Welcome back, Ahmad</h1>
+            <h1 className="text-2xl font-bold">Welcome back, {userName}</h1>
             <p className="text-white/80 mt-1">Your trade finance dashboard — instant cash for invoices & shipments.</p>
             <div className="mt-3 flex items-center gap-2">
               <span className="text-sm text-white/70">Available Credit Line:</span>
               <span className="text-xl font-bold">RM {creditLimit.toLocaleString()}</span>
+              <span className="text-xs text-white/60 bg-white/10 px-2 py-1 rounded-full">Active</span>
             </div>
           </div>
           <div className="flex gap-3">
             <button
               onClick={() => navigate('/financing')}
-              className="flex items-center gap-2 px-5 py-2.5 bg-white text-tng-blue rounded-lg text-sm font-semibold hover:bg-gray-100 transition-colors shadow-sm"
+              className="flex items-center gap-2 px-5 py-2.5 bg-white text-tng-blue rounded-lg text-sm font-semibold hover:bg-gray-100 transition-all hover:scale-105 shadow-sm"
             >
               <Banknote className="w-4 h-4" />
               Finance an Invoice
             </button>
             <button
               onClick={() => navigate('/shipments')}
-              className="flex items-center gap-2 px-5 py-2.5 bg-white/10 text-white rounded-lg text-sm font-semibold hover:bg-white/20 transition-colors border border-white/20"
+              className="flex items-center gap-2 px-5 py-2.5 bg-white/10 text-white rounded-lg text-sm font-semibold hover:bg-white/20 transition-all hover:scale-105 border border-white/20"
             >
               <Truck className="w-4 h-4" />
               Track Shipment
@@ -89,36 +97,47 @@ export default function Dashboard() {
       </div>
 
       {/* KPI Cards */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-        <KPICard
-          icon={Banknote}
-          title="Total Financed"
-          value={`RM ${(kpis.totalFinanced / 1000000).toFixed(1)}M`}
-          trend={18.5}
-          trendUp={true}
-        />
-        <KPICard
-          icon={FileText}
-          title="Active Invoices"
-          value={String(kpis.activeInvoices)}
-          trend={1}
-          trendUp={true}
-        />
-        <KPICard
-          icon={TrendingUp}
-          title="Avg Factoring Rate"
-          value={`${kpis.avgFactoringRate.toFixed(1)}%`}
-          trend={0.3}
-          trendUp={false}
-        />
-        <KPICard
-          icon={Shield}
-          title="Repayment Rate"
-          value={`${kpis.repaymentRate.toFixed(1)}%`}
-          trend={2.1}
-          trendUp={true}
-        />
-      </div>
+      {isLoadingKpis ? (
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+          {[1, 2, 3, 4].map((i) => (
+            <div key={i} className="bg-white rounded-xl p-6 shadow-sm border border-gray-100 animate-pulse">
+              <div className="h-10 bg-gray-200 rounded mb-2"></div>
+              <div className="h-8 bg-gray-200 rounded"></div>
+            </div>
+          ))}
+        </div>
+      ) : (
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+          <KPICard
+            icon={Banknote}
+            title="Total Financed"
+            value={`RM ${(kpis.totalFinanced / 1000000).toFixed(1)}M`}
+            trend={18.5}
+            trendUp={true}
+          />
+          <KPICard
+            icon={FileText}
+            title="Active Invoices"
+            value={String(kpis.activeInvoices)}
+            trend={1}
+            trendUp={true}
+          />
+          <KPICard
+            icon={TrendingUp}
+            title="Avg Factoring Rate"
+            value={`${kpis.avgFactoringRate.toFixed(1)}%`}
+            trend={0.3}
+            trendUp={false}
+          />
+          <KPICard
+            icon={Shield}
+            title="Repayment Rate"
+            value={`${kpis.repaymentRate.toFixed(1)}%`}
+            trend={2.1}
+            trendUp={true}
+          />
+        </div>
+      )}
 
       {/* Main Content Grid */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
@@ -172,8 +191,8 @@ export default function Dashboard() {
                 <Activity className="w-5 h-5 text-purple-600" />
               </div>
               <div>
-                <p className="text-xs text-gray-500">IoT Devices Online</p>
-                <p className="text-lg font-bold text-gray-900">{iotDevices}/12</p>
+                <p className="text-xs text-gray-500">Carrier API Status</p>
+                <p className="text-lg font-bold text-gray-900">All Online</p>
               </div>
             </div>
             <div className="w-full h-px bg-gray-100" />

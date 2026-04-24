@@ -1,4 +1,4 @@
-monthly_txn_volume,avg_txn_size,business_tenure_months,iot_device_uptime_pct,payment_consistency_score,industry_sector,monthly_revenue,num_employees,credit_approved,credit_limit,risk_tier
+monthly_txn_volume,avg_txn_size,business_tenure_months,tracking_reliability_pct,payment_consistency_score,industry_sector,monthly_revenue,num_employees,credit_approved,credit_limit,risk_tier
 107,39546.62,6,97.73,0.8603,logistics,500000.0,67,0,50000,HIGH
 440,15971.69,58,75.15,0.4385,services,500000.0,137,1,365421,LOW
 353,31313.27,69,95.01,0.9527,fnb,500000.0,116,1,374269,LOW

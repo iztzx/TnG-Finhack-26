@@ -26,6 +26,12 @@ const Login = () => {
     }
   };
 
+  // Quick demo login shortcuts
+  const quickLogin = (demoEmail, demoPassword) => {
+    setEmail(demoEmail);
+    setPassword(demoPassword);
+  };
+
   return (
     <div className="min-h-screen flex items-center justify-center" style={{ background: 'linear-gradient(135deg, #0B0F1A 0%, #0F2A5C 50%, #0B0F1A 100%)' }}>
       <div 
@@ -57,12 +63,14 @@ const Login = () => {
 
         <form onSubmit={handleLogin} className="flex flex-col gap-5">
           <div className="flex flex-col gap-1.5">
-            <label style={{ fontSize: '13px', fontWeight: 500, color: 'rgba(255,255,255,0.7)' }}>
+            <label htmlFor="email" style={{ fontSize: '13px', fontWeight: 500, color: 'rgba(255,255,255,0.7)' }}>
               Email address
             </label>
             <input 
+              id="email"
               type="email" 
               required
+              autoComplete="email"
               value={email}
               onChange={(e) => setEmail(e.target.value)}
               placeholder="you@company.com"
@@ -84,7 +92,7 @@ const Login = () => {
 
           <div className="flex flex-col gap-1.5 relative">
             <div className="flex items-center justify-between">
-              <label style={{ fontSize: '13px', fontWeight: 500, color: 'rgba(255,255,255,0.7)' }}>
+              <label htmlFor="password" style={{ fontSize: '13px', fontWeight: 500, color: 'rgba(255,255,255,0.7)' }}>
                 Password
               </label>
               <span 
@@ -103,8 +111,10 @@ const Login = () => {
             
             <div className="relative">
               <input 
+                id="password"
                 type={showPassword ? "text" : "password"} 
                 required
+                autoComplete="current-password"
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
                 placeholder="••••••••"
@@ -127,6 +137,7 @@ const Login = () => {
                 type="button"
                 onClick={() => setShowPassword(!showPassword)}
                 className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-300"
+                aria-label={showPassword ? "Hide password" : "Show password"}
               >
                 <svg width="18" height="18" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
                   {showPassword ? (
@@ -181,6 +192,53 @@ const Login = () => {
             ) : "Sign In"}
           </button>
         </form>
+
+        {/* Demo Quick Login */}
+        <div style={{ marginTop: '24px', padding: '12px', background: 'rgba(59,130,246,0.1)', border: '1px solid rgba(59,130,246,0.2)', borderRadius: '8px' }}>
+          <p style={{ fontSize: '11px', color: 'rgba(255,255,255,0.5)', marginBottom: '8px', textTransform: 'uppercase', letterSpacing: '0.5px' }}>Demo Accounts</p>
+          <div className="flex gap-2">
+            <button
+              type="button"
+              onClick={() => quickLogin('user@pantasflow.com', 'demo123')}
+              disabled={isLoading}
+              style={{ 
+                flex: 1,
+                fontSize: '12px', 
+                padding: '6px 10px', 
+                background: 'rgba(255,255,255,0.1)', 
+                border: '1px solid rgba(255,255,255,0.2)', 
+                borderRadius: '6px', 
+                color: 'rgba(255,255,255,0.8)', 
+                cursor: isLoading ? 'not-allowed' : 'pointer',
+                transition: 'all 0.2s'
+              }}
+              onMouseOver={(e) => { if(!isLoading) e.currentTarget.style.background = 'rgba(255,255,255,0.15)'; }}
+              onMouseOut={(e) => { if(!isLoading) e.currentTarget.style.background = 'rgba(255,255,255,0.1)'; }}
+            >
+              User Login
+            </button>
+            <button
+              type="button"
+              onClick={() => quickLogin('admin@pantasflow.com', 'admin123')}
+              disabled={isLoading}
+              style={{ 
+                flex: 1,
+                fontSize: '12px', 
+                padding: '6px 10px', 
+                background: 'rgba(255,255,255,0.1)', 
+                border: '1px solid rgba(255,255,255,0.2)', 
+                borderRadius: '6px', 
+                color: 'rgba(255,255,255,0.8)', 
+                cursor: isLoading ? 'not-allowed' : 'pointer',
+                transition: 'all 0.2s'
+              }}
+              onMouseOver={(e) => { if(!isLoading) e.currentTarget.style.background = 'rgba(255,255,255,0.15)'; }}
+              onMouseOut={(e) => { if(!isLoading) e.currentTarget.style.background = 'rgba(255,255,255,0.1)'; }}
+            >
+              Admin Login
+            </button>
+          </div>
+        </div>
 
         <div style={{ fontSize: '13px', color: 'rgba(255,255,255,0.45)', textAlign: 'center', marginTop: '32px' }}>
           Don't have an account? <Link to="/register" style={{ fontWeight: 600, color: '#60A5FA', textDecoration: 'none' }}>Create one free →</Link>

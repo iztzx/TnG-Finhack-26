@@ -9,7 +9,7 @@ const smartResponses = {
   'what fees do i pay': 'You pay a one-time factoring fee per invoice, typically 1-5% of the invoice amount. This fee is deducted upfront from your advance. For example, on a RM 10,000 invoice with a 3% fee, you receive RM 9,200 instantly (after the 95% advance and fee deduction). There are no hidden charges or monthly fees.',
   'am i eligible': 'Eligibility criteria for Malaysian SMEs:\n• Registered business in Malaysia (SSM)\n• Minimum 12 months operating history\n• Monthly revenue of at least RM 10,000\n• Valid trade invoices or shipment documents\n• TNG e-wallet account for disbursement\n\nYour current credit score of 780 qualifies you for our best rates!',
   'how long does disbursement take': 'Once you accept an offer, funds are disbursed to your TNG Wallet within seconds. The entire process from upload to cash in hand takes under 3 minutes.',
-  'what is shipment financing': 'Shipment financing lets you get up to 85% of your shipment value before delivery. We verify your shipment via IoT sensors, customs data, and carrier records. Once verified, you receive the advance just like invoice financing.',
+  'what is shipment financing': 'Shipment financing lets you get up to 85% of your shipment value before delivery. We verify your shipment via satellite imagery, carrier API tracking, and customs data. Once verified, you receive the advance just like invoice financing.',
 };
 
 const welcomeMessage = {
