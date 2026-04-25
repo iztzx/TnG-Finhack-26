@@ -16,7 +16,7 @@
 
 body {
   margin: 0;
-  font-family: 'Segoe UI Variable', 'Aptos', 'Trebuchet MS', 'Segoe UI', sans-serif;
+  font-family: 'Karla', 'Segoe UI Variable', 'Aptos', 'Trebuchet MS', 'Segoe UI', sans-serif;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
   background-color: var(--color-content);

@@ -5,7 +5,7 @@ import { User, Building2, Mail, Phone, Shield, Wallet, CreditCard, Clock, Chevro
 import { useNavigate } from 'react-router-dom';
 
 export default function Profile() {
-  const { userProfile, logout } = useAuth();
+  const { userProfile, logout, updateProfile } = useAuth();
   const navigate = useNavigate();
 
   // Change password state

@@ -572,6 +572,151 @@ def post_to_aws_webhook(invoice_id: str, extracted_data: dict, user_id: str = ""
     return response
 
 
+# ============================================================================
+# WSGI helpers for JSON endpoints (/chat, /summary)
+# ============================================================================
+
+def _read_json_body(environ) -> dict:
+    try:
+        content_length = int(environ.get("CONTENT_LENGTH", 0))
+    except ValueError:
+        content_length = 0
+    if content_length > 0:
+        body = environ["wsgi.input"].read(content_length)
+    else:
+        body = b""
+    if not body:
+        return {}
+    try:
+        return json.loads(body.decode("utf-8"))
+    except (json.JSONDecodeError, UnicodeDecodeError):
+        return {}
+
+
+SYSTEM_PROMPT_CHAT_WSGI = (
+    "You are OUT&IN Financing Assistant, an expert AI advisor for the OUT&IN Supply Chain Capital platform. "
+    "You help SME exporters in Malaysia and Southeast Asia with trade finance questions. "
+    "Be concise, professional, and helpful. Use RM for Malaysian Ringgit. "
+    "If the user asks about their specific data, reference the provided context accurately. "
+    "If you do not know something, say so rather than guessing."
+)
+
+SYSTEM_PROMPT_SUMMARY_WSGI = (
+    "You are an executive financial analyst for OUT&IN Supply Chain Capital. "
+    "Generate a concise, insightful executive summary of the user's business status on the platform. "
+    "Cover: overall financial health, active financing, shipment status, risks, and actionable recommendations. "
+    "Use bullet points and bold key numbers. Keep it under 250 words. Be encouraging but realistic."
+)
+
+
+def _call_qwen_chat_wsgi(messages, temperature=0.7):
+    api_key, base_url, model = get_document_api_config()
+    if not api_key:
+        raise RuntimeError("DASHSCOPE_API_KEY is not configured")
+    return call_chat_completions(api_key, base_url, model, messages, temperature=temperature)
+
+
+def _handle_chat_wsgi(environ, start_response, request_id):
+    data = _read_json_body(environ)
+    user_message = str(data.get("message", "")).strip()
+    history = data.get("history", []) or []
+    context = data.get("context", {}) or {}
+
+    if not user_message:
+        return json_response(
+            start_response,
+            "400 Bad Request",
+            {
+                "success": False,
+                "requestId": request_id,
+                "errorCode": "INVALID_REQUEST",
+                "message": "Missing message field",
+            },
+        )
+
+    log_event("ai_chat_started", requestId=request_id, messageLength=len(user_message), hasContext=bool(context))
+
+    try:
+        messages = [{"role": "system", "content": SYSTEM_PROMPT_CHAT_WSGI}]
+
+        if context:
+            ctx_text = "USER CONTEXT:\n" + json.dumps(context, ensure_ascii=False, indent=2)
+            messages.append({"role": "system", "content": ctx_text})
+
+        for h in history[-10:]:
+            role = h.get("role", "user")
+            content = str(h.get("content", ""))
+            if content:
+                messages.append({"role": role, "content": content})
+
+        messages.append({"role": "user", "content": user_message})
+
+        reply = _call_qwen_chat_wsgi(messages, temperature=0.7)
+        log_event("ai_chat_completed", requestId=request_id, replyLength=len(reply))
+        return json_response(
+            start_response,
+            "200 OK",
+            {"success": True, "requestId": request_id, "reply": reply},
+        )
+    except Exception as exc:
+        log_event("ai_chat_failed", requestId=request_id, error=str(exc))
+        return json_response(
+            start_response,
+            "502 Bad Gateway",
+            {
+                "success": False,
+                "requestId": request_id,
+                "errorCode": "AI_CHAT_FAILED",
+                "message": str(exc),
+            },
+        )
+
+
+def _handle_summary_wsgi(environ, start_response, request_id):
+    data = _read_json_body(environ)
+    context = data.get("context", {}) or {}
+
+    if not context:
+        return json_response(
+            start_response,
+            "400 Bad Request",
+            {
+                "success": False,
+                "requestId": request_id,
+                "errorCode": "INVALID_REQUEST",
+                "message": "Missing context field",
+            },
+        )
+
+    log_event("ai_summary_started", requestId=request_id, hasProfile=bool(context.get("profile")))
+
+    try:
+        ctx_text = "USER DATA:\n" + json.dumps(context, ensure_ascii=False, indent=2)
+        messages = [
+            {"role": "system", "content": SYSTEM_PROMPT_SUMMARY_WSGI},
+            {"role": "user", "content": ctx_text},
+        ]
+        reply = _call_qwen_chat_wsgi(messages, temperature=0.7)
+        log_event("ai_summary_completed", requestId=request_id, replyLength=len(reply))
+        return json_response(
+            start_response,
+            "200 OK",
+            {"success": True, "requestId": request_id, "summary": reply},
+        )
+    except Exception as exc:
+        log_event("ai_summary_failed", requestId=request_id, error=str(exc))
+        return json_response(
+            start_response,
+            "502 Bad Gateway",
+            {
+                "success": False,
+                "requestId": request_id,
+                "errorCode": "AI_SUMMARY_FAILED",
+                "message": str(exc),
+            },
+        )
+
+
 def handler(environ, start_response):
     request_id = (
         environ.get("fc.request_id")
@@ -596,6 +741,12 @@ def handler(environ, start_response):
                 "message": "Preflight accepted",
             },
         )
+
+    path = environ.get("PATH_INFO", "/")
+    if path == "/chat":
+        return _handle_chat_wsgi(environ, start_response, request_id)
+    if path == "/summary":
+        return _handle_summary_wsgi(environ, start_response, request_id)
 
     try:
         file_bytes, file_name, mime_type, user_id, shipment_number, contact_email = extract_upload_from_request(environ)

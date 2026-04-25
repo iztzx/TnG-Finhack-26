@@ -626,14 +626,31 @@ export const getAuditTrail = async (userId = 'demo-user-001') => {
 };
 
 // ============================================================================
-// AI Assistant API – sends user query to backend AI endpoint
+// AI Assistant API – sends user query to Alibaba Cloud Function Compute
+// Qwen AI endpoint (uses DASHSCOPE_API_KEY from Alibaba env)
 // ============================================================================
-export const queryAIAssistant = async (message, history = []) => {
+export const queryAIAssistant = async (message, history = [], context = null) => {
   try {
-    const response = await api.post('/api/ai/chat', { message, history });
+    const payload = { message, history };
+    if (context) payload.context = context;
+    const response = await alibabaApi.post(`${ALIBABA_FC_URL}/chat`, payload, {
+      headers: { 'Content-Type': 'application/json' },
+    });
     return response.data;
   } catch (err) {
-    console.warn('queryAIAssistant fallback:', err.message);
+    console.warn('queryAIAssistant error:', err.message);
+    return null;
+  }
+};
+
+export const getExecutiveSummary = async (context) => {
+  try {
+    const response = await alibabaApi.post(`${ALIBABA_FC_URL}/summary`, { context }, {
+      headers: { 'Content-Type': 'application/json' },
+    });
+    return response.data;
+  } catch (err) {
+    console.warn('getExecutiveSummary error:', err.message);
     return null;
   }
 };

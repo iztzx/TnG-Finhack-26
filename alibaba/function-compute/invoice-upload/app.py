@@ -1,3 +1,4 @@
+import json
 import os
 import uuid
 
@@ -10,6 +11,8 @@ from index import (
     SUPPORTED_MIME_TYPES,
     SUPPORTED_EXTENSIONS,
     get_file_extension,
+    call_chat_completions,
+    get_document_api_config,
 )
 
 app = Flask(__name__)
@@ -147,6 +150,119 @@ def add_cors_headers(response):
     response.headers["Access-Control-Allow-Headers"] = "Content-Type,Authorization"
     response.headers["Access-Control-Allow-Methods"] = "POST,OPTIONS"
     return response
+
+
+# ============================================================================
+# AI Chat & Summary endpoints (Qwen via DashScope)
+# ============================================================================
+
+SYSTEM_PROMPT_CHAT = (
+    "You are OUT&IN Financing Assistant, an expert AI advisor for the OUT&IN Supply Chain Capital platform. "
+    "You help SME exporters in Malaysia and Southeast Asia with trade finance questions. "
+    "Be concise, professional, and helpful. Use RM for Malaysian Ringgit. "
+    "If the user asks about their specific data, reference the provided context accurately. "
+    "If you do not know something, say so rather than guessing."
+)
+
+SYSTEM_PROMPT_SUMMARY = (
+    "You are an executive financial analyst for OUT&IN Supply Chain Capital. "
+    "Generate a concise, insightful executive summary of the user's business status on the platform. "
+    "Cover: overall financial health, active financing, shipment status, risks, and actionable recommendations. "
+    "Use bullet points and bold key numbers. Keep it under 250 words. Be encouraging but realistic."
+)
+
+
+def _call_qwen_chat(messages, temperature=0.7):
+    api_key, base_url, model = get_document_api_config()
+    if not api_key:
+        raise RuntimeError("DASHSCOPE_API_KEY is not configured")
+    return call_chat_completions(api_key, base_url, model, messages, temperature=temperature)
+
+
+@app.route("/chat", methods=["POST", "OPTIONS"])
+def handle_chat():
+    request_id = request.headers.get("X-Request-ID") or str(uuid.uuid4())
+
+    if request.method == "OPTIONS":
+        resp = jsonify({"success": True, "requestId": request_id, "message": "Preflight accepted"})
+        resp.headers["Access-Control-Allow-Origin"] = "*"
+        resp.headers["Access-Control-Allow-Headers"] = "Content-Type,Authorization"
+        resp.headers["Access-Control-Allow-Methods"] = "POST,OPTIONS"
+        return resp
+
+    try:
+        data = request.get_json(force=True, silent=True) or {}
+    except Exception:
+        data = {}
+
+    user_message = str(data.get("message", "")).strip()
+    history = data.get("history", []) or []
+    context = data.get("context", {}) or {}
+
+    if not user_message:
+        return jsonify({"success": False, "requestId": request_id, "errorCode": "INVALID_REQUEST", "message": "Missing message field"}), 400
+
+    log_event("ai_chat_started", requestId=request_id, messageLength=len(user_message), hasContext=bool(context))
+
+    try:
+        messages = [{"role": "system", "content": SYSTEM_PROMPT_CHAT}]
+
+        if context:
+            ctx_text = "USER CONTEXT:\n" + json.dumps(context, ensure_ascii=False, indent=2)
+            messages.append({"role": "system", "content": ctx_text})
+
+        for h in history[-10:]:
+            role = h.get("role", "user")
+            content = str(h.get("content", ""))
+            if content:
+                messages.append({"role": role, "content": content})
+
+        messages.append({"role": "user", "content": user_message})
+
+        reply = _call_qwen_chat(messages, temperature=0.7)
+        log_event("ai_chat_completed", requestId=request_id, replyLength=len(reply))
+        return jsonify({"success": True, "requestId": request_id, "reply": reply})
+
+    except Exception as exc:
+        log_event("ai_chat_failed", requestId=request_id, error=str(exc))
+        return jsonify({"success": False, "requestId": request_id, "errorCode": "AI_CHAT_FAILED", "message": str(exc)}), 502
+
+
+@app.route("/summary", methods=["POST", "OPTIONS"])
+def handle_summary():
+    request_id = request.headers.get("X-Request-ID") or str(uuid.uuid4())
+
+    if request.method == "OPTIONS":
+        resp = jsonify({"success": True, "requestId": request_id, "message": "Preflight accepted"})
+        resp.headers["Access-Control-Allow-Origin"] = "*"
+        resp.headers["Access-Control-Allow-Headers"] = "Content-Type,Authorization"
+        resp.headers["Access-Control-Allow-Methods"] = "POST,OPTIONS"
+        return resp
+
+    try:
+        data = request.get_json(force=True, silent=True) or {}
+    except Exception:
+        data = {}
+
+    context = data.get("context", {}) or {}
+    if not context:
+        return jsonify({"success": False, "requestId": request_id, "errorCode": "INVALID_REQUEST", "message": "Missing context field"}), 400
+
+    log_event("ai_summary_started", requestId=request_id, hasProfile=bool(context.get("profile")))
+
+    try:
+        ctx_text = "USER DATA:\n" + json.dumps(context, ensure_ascii=False, indent=2)
+        messages = [
+            {"role": "system", "content": SYSTEM_PROMPT_SUMMARY},
+            {"role": "user", "content": ctx_text},
+        ]
+        reply = _call_qwen_chat(messages, temperature=0.7)
+        log_event("ai_summary_completed", requestId=request_id, replyLength=len(reply))
+        return jsonify({"success": True, "requestId": request_id, "summary": reply})
+
+    except Exception as exc:
+        log_event("ai_summary_failed", requestId=request_id, error=str(exc))
+        return jsonify({"success": False, "requestId": request_id, "errorCode": "AI_SUMMARY_FAILED", "message": str(exc)}), 502
 
 
 if __name__ == "__main__":

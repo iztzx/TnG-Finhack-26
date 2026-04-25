@@ -352,6 +352,12 @@ Resources:
             Path: /api/auth/change-password
             Method: POST
             RestApiId: !Ref TnGApiGateway
+        AuthUpdateProfile:
+          Type: Api
+          Properties:
+            Path: /api/auth/profile
+            Method: PUT
+            RestApiId: !Ref TnGApiGateway
 
   ScoringFunction:
     Type: AWS::Serverless::Function

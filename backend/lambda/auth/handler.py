@@ -135,6 +135,13 @@ class ChangePasswordRequest(BaseModel):
         return v
 
 
+class UpdateProfileRequest(BaseModel):
+    companyName: Optional[str] = None
+    registrationNo: Optional[str] = None
+    businessType: Optional[str] = None
+    phoneNumber: Optional[str] = None
+
+
 # ===================================================================
 # Helpers
 # ===================================================================
@@ -512,6 +519,81 @@ def handle_change_password(email: str, body: dict) -> dict:
     return _response(200, {"message": "Password changed successfully"})
 
 
+def handle_update_profile(email: str, body: dict) -> dict:
+    """
+    Update profile fields for an authenticated user.
+    Only updates the fields that are provided and non-null.
+    """
+    try:
+        req = UpdateProfileRequest(**body)
+    except ValidationError as exc:
+        errors = [
+            {"field": ".".join(str(loc) for loc in err["loc"]), "message": err["msg"]}
+            for err in exc.errors()
+        ]
+        return _response(400, {"error": "Validation failed", "details": errors})
+
+    # Fetch user
+    try:
+        result = users_table.get_item(Key={"id": email})
+        item = result.get("Item")
+    except Exception as exc:
+        logger.error("DynamoDB read failed during update-profile", extra={"error": str(exc)})
+        return _response(500, {"error": "Internal server error"})
+
+    if not item:
+        return _response(404, {"error": "User not found"})
+
+    # Build update expression dynamically
+    update_fields = []
+    expression_values = {}
+
+    if req.companyName is not None:
+        update_fields.append("companyName = :cn")
+        expression_values[":cn"] = req.companyName
+    if req.registrationNo is not None:
+        update_fields.append("registrationNo = :rn")
+        expression_values[":rn"] = req.registrationNo
+    if req.businessType is not None:
+        update_fields.append("businessType = :bt")
+        expression_values[":bt"] = req.businessType
+    if req.phoneNumber is not None:
+        update_fields.append("phoneNumber = :pn")
+        expression_values[":pn"] = req.phoneNumber
+
+    if not update_fields:
+        # Nothing to update – return current profile
+        profile = _user_profile_from_item(dict(item))
+        return _response(200, {"profile": profile})
+
+    now_utc = datetime.now(timezone.utc).isoformat()
+    update_fields.append("updatedAt = :ua")
+    expression_values[":ua"] = now_utc
+
+    try:
+        users_table.update_item(
+            Key={"id": email},
+            UpdateExpression="SET " + ", ".join(update_fields),
+            ExpressionAttributeValues=expression_values,
+            ReturnValues="ALL_NEW",
+        )
+    except Exception as exc:
+        logger.error("Failed to update profile", extra={"error": str(exc)})
+        return _response(500, {"error": "Failed to update profile"})
+
+    # Fetch fresh profile to return
+    try:
+        result = users_table.get_item(Key={"id": email})
+        item = result.get("Item")
+        profile = _user_profile_from_item(dict(item)) if item else {}
+    except Exception as exc:
+        logger.error("Failed to fetch updated profile", extra={"error": str(exc)})
+        profile = {}
+
+    logger.info("Profile updated", extra={"email": email})
+    return _response(200, {"profile": profile})
+
+
 def handle_me(auth_header: str) -> dict:
     if not auth_header or not auth_header.startswith("Bearer "):
         return _response(401, {"error": "Missing or invalid authorization header"})
@@ -596,6 +678,20 @@ def handler(event, context):
         except jwt.InvalidTokenError:
             return _response(401, {"error": "Invalid token"})
         return handle_change_password(email, body)
+    elif path == "/api/auth/profile" and method == "PUT":
+        auth_header = (event.get("headers") or {}).get("Authorization", "") or (event.get("headers") or {}).get("authorization", "")
+        if not auth_header or not auth_header.startswith("Bearer "):
+            return _response(401, {"error": "Authentication required"})
+        try:
+            payload = jwt.decode(auth_header[7:], JWT_SECRET, algorithms=[JWT_ALGORITHM])
+            email = payload.get("email", "")
+            if not email:
+                return _response(401, {"error": "Invalid token"})
+        except jwt.ExpiredSignatureError:
+            return _response(401, {"error": "Token expired", "code": "TOKEN_EXPIRED"})
+        except jwt.InvalidTokenError:
+            return _response(401, {"error": "Invalid token"})
+        return handle_update_profile(email, body)
     elif path == "/api/auth/me" and method == "GET":
         auth_header = (event.get("headers") or {}).get("Authorization", "") or (event.get("headers") or {}).get("authorization", "")
         return handle_me(auth_header)
