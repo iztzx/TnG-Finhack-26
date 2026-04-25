@@ -60,7 +60,7 @@ transactions_table = dynamodb.Table(TRANSACTIONS_TABLE)
 # ---------------------------------------------------------------------------
 CORS_HEADERS = {
     "Content-Type": "application/json",
-    "Access-Control-Allow-Origin": "*",
+    "Access-Control-Allow-Origin": os.environ.get("ALLOWED_ORIGIN", "*"),
     "Access-Control-Allow-Headers": "Content-Type,X-Amz-Date,Authorization",
     "Access-Control-Allow-Methods": "POST,OPTIONS",
 }
@@ -104,8 +104,30 @@ def _conflict(detail: str) -> dict:
     return _response(409, {"error": "Conflict", "detail": detail})
 
 
-def _rollback_offer(offer_id: str, reason: str) -> None:
+def _reverse_ledger(transaction_id: str) -> None:
+    """Reverse a ledger entry by marking it as REVERSED."""
+    try:
+        transactions_table.update_item(
+            Key={"id": transaction_id},
+            UpdateExpression="SET #st = :st, updatedAt = :ua",
+            ExpressionAttributeNames={"#st": "status"},
+            ExpressionAttributeValues={
+                ":st": "REVERSED",
+                ":ua": datetime.now(timezone.utc).isoformat(),
+            },
+        )
+        logger.info("Ledger entry reversed", extra={"transactionId": transaction_id})
+    except Exception as exc:
+        logger.critical("Failed to reverse ledger entry – manual reconciliation required", extra={
+            "transactionId": transaction_id,
+            "error": str(exc),
+        })
+
+
+def _rollback_offer(offer_id: str, reason: str, transaction_id: Optional[str] = None) -> None:
     """Roll back offer status to DISBURSEMENT_FAILED so the request can be retried."""
+    if transaction_id:
+        _reverse_ledger(transaction_id)
     try:
         offers_table.update_item(
             Key={"id": offer_id},
@@ -121,6 +143,19 @@ def _rollback_offer(offer_id: str, reason: str) -> None:
             "offerId": offer_id,
             "reason": reason,
         })
+    except ClientError as rollback_exc:
+        if rollback_exc.response["Error"]["Code"] == "ConditionalCheckFailedException":
+            logger.error("Rollback failed – offer no longer in ACCEPTED state", extra={
+                "offerId": offer_id,
+                "reason": reason,
+                "currentState": "unknown (concurrent modification)",
+            })
+        else:
+            logger.critical("Rollback failed – manual reconciliation required", extra={
+                "offerId": offer_id,
+                "reason": reason,
+                "rollbackError": str(rollback_exc),
+            })
     except Exception as rollback_exc:
         logger.critical("Rollback failed – manual reconciliation required", extra={
             "offerId": offer_id,
@@ -205,6 +240,23 @@ def handler(event, context):
             "offerId": request.offerId,
         })
         return _bad_request("Cannot disburse: offer has no associated SME ID")
+
+    # Verify the SME user actually exists in the Users table
+    try:
+        user_check = users_table.get_item(Key={"id": sme_id})
+        if "Item" not in user_check:
+            logger.error("Cannot disburse: SME user not found in Users table", extra={
+                "offerId": request.offerId,
+                "smeId": sme_id,
+            })
+            return _not_found("User", sme_id)
+    except Exception as exc:
+        logger.error("Failed to verify SME user existence", extra={
+            "offerId": request.offerId,
+            "smeId": sme_id,
+            "error": str(exc),
+        })
+        return _internal_error("Failed to verify SME user")
 
     # Validate netDisbursement exists and is positive (use Decimal for precision)
     raw_disbursement = offer.get("netDisbursement")
@@ -375,7 +427,7 @@ def handler(event, context):
             "offerId": request.offerId,
             "error": str(exc),
         })
-        _rollback_offer(request.offerId, "Wallet update failed")
+        _rollback_offer(request.offerId, "Wallet update failed", transaction_id)
         return _internal_error("Failed to update wallet balance – disbursement rolled back")
 
     logger.info("Wallet balance updated", extra={

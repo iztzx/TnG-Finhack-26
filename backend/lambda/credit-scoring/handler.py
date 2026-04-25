@@ -6,6 +6,7 @@ import os
 import uuid
 import hashlib
 
+import jwt
 from boto3.dynamodb.conditions import Key
 
 dynamodb = boto3.resource('dynamodb')
@@ -13,12 +14,38 @@ txn_table = dynamodb.Table(os.environ.get('TXN_TABLE', 'tng-finhack-transactions
 risk_table = dynamodb.Table(os.environ.get('RISK_TABLE', 'tng-finhack-risk-scores'))
 invoice_table = dynamodb.Table(os.environ.get('INVOICE_TABLE', 'tng-finhack-invoices'))
 
+JWT_SECRET = os.environ.get('JWT_SECRET', '')
+JWT_ALGORITHM = 'HS256'
+
 CORS_HEADERS = {
-    'Access-Control-Allow-Origin': '*',
+    'Access-Control-Allow-Origin': os.environ.get('ALLOWED_ORIGIN', '*'),
     'Access-Control-Allow-Headers': 'Content-Type,X-Amz-Date,Authorization',
     'Access-Control-Allow-Methods': 'POST,GET,OPTIONS',
     'Content-Type': 'application/json'
 }
+
+
+def _verify_jwt(event):
+    """Extract and verify JWT from Authorization header. Returns email or None."""
+    if not JWT_SECRET:
+        return None
+    headers = event.get('headers') or {}
+    auth_header = headers.get('Authorization', '') or headers.get('authorization', '')
+    if not auth_header or not auth_header.startswith('Bearer '):
+        return None
+    try:
+        payload = jwt.decode(auth_header[7:], JWT_SECRET, algorithms=[JWT_ALGORITHM])
+        return payload.get('email', '')
+    except Exception:
+        return None
+
+
+def _enforce_auth(event):
+    """Verify JWT for protected endpoints. Returns (email, error_response)."""
+    email = _verify_jwt(event)
+    if not email:
+        return None, json_response({'error': 'Authentication required'}, 401)
+    return email, None
 
 
 # ---------------------------------------------------------------------------
@@ -657,12 +684,35 @@ def handler(event, context):
 
     if method == 'OPTIONS':
         return {'statusCode': 200, 'headers': CORS_HEADERS, 'body': ''}
+
+    # Public endpoints (no auth required)
+    if method == 'GET' and '/telemetry' in path:
+        return handle_telemetry(event)
+
+    # All other endpoints require a valid JWT
+    email, error = _enforce_auth(event)
+    if error:
+        return error
+
+    # Override userId in request body with authenticated email
+    if event.get('body'):
+        try:
+            body = json.loads(event['body'])
+            if 'userId' in body:
+                body['userId'] = email
+                event['body'] = json.dumps(body)
+        except (json.JSONDecodeError, TypeError):
+            pass
+
+    # Override userId in path parameters with authenticated email
+    path_params = event.setdefault('pathParameters', {}) or {}
+    if 'userId' in path_params:
+        path_params['userId'] = email
+
     if method == 'POST' and '/trigger' in path:
         return handle_trigger(event)
     if method == 'GET' and '/transactions' in path:
         return handle_transactions(event)
-    if method == 'GET' and '/telemetry' in path:
-        return handle_telemetry(event)
 
     # Invoice routes
     if method == 'POST' and '/invoice/upload' in path:

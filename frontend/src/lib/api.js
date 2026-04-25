@@ -42,7 +42,7 @@ const api = axios.create({
 api.interceptors.request.use(
   (config) => {
     // Attach auth token
-    const token = localStorage.getItem('pf_token');
+    const token = localStorage.getItem('tng_token');
     if (token && !config.headers?.Authorization) {
       config.headers.Authorization = `Bearer ${token}`;
     }
@@ -64,12 +64,13 @@ api.interceptors.response.use(
 
     // Auto-redirect on 401 (token expired / invalid)
     if (status === 401 && !error.config?.url?.includes('/api/auth/')) {
-      localStorage.removeItem('pf_token');
-      localStorage.removeItem('pf_user');
-      // Only redirect if not already on login page
-      if (!window.location.pathname.includes('/login')) {
-        window.location.href = '/login?reason=expired';
+      localStorage.removeItem('tng_token');
+      localStorage.removeItem('tng_user');
+      // If already on login page, clear storage silently to prevent race conditions
+      if (window.location.pathname.includes('/login')) {
+        return Promise.reject(error);
       }
+      window.location.href = '/login?reason=expired';
     }
 
     // Build a human-readable message
@@ -149,9 +150,18 @@ alibabaApi.interceptors.response.use(
  * @param {File} file - PDF, JPG, or PNG invoice file
  * @returns {Promise<{invoiceId: string, extractedData: object, awsStatusCode: number}>}
  */
-export async function uploadToAlibaba(file) {
+export async function uploadToAlibaba(file, userId = '', shipmentNumber = '', contactEmail = '') {
   const formData = new FormData();
   formData.append('file', file);
+  if (userId) {
+    formData.append('userId', userId);
+  }
+  if (shipmentNumber) {
+    formData.append('shipmentNumber', shipmentNumber);
+  }
+  if (contactEmail) {
+    formData.append('contactEmail', contactEmail);
+  }
 
   // Do NOT set Content-Type manually – the browser must generate the
   // multipart boundary automatically.  Overriding the header strips the
@@ -209,7 +219,7 @@ export async function getScoringOffer(invoiceId, { intervalMs, maxAttempts, onAt
       // Alibaba POSTs to it. By the time we poll, the offer should exist.
       // We query by invoiceId via the offers table's smeId GSI (or direct
       // lookup). For the hackathon, we use the existing /invoice/offer endpoint.
-      const response = await api.post('/invoice/offer', { invoiceId });
+      const response = await api.post('/api/invoice/offer', { invoiceId });
       const offer = response.data?.offer;
 
       if (offer) {
@@ -264,29 +274,48 @@ export async function acceptOffer(offerId, userId) {
 }
 
 // ============================================================================
+// Auth API – registration, login, profile, password management
+// ============================================================================
+
+export const forgotPassword = async (email) => {
+  const response = await api.post('/api/auth/forgot-password', { email });
+  return response.data;
+};
+
+export const resetPassword = async (email, resetToken, newPassword) => {
+  const response = await api.post('/api/auth/reset-password', {
+    email,
+    reset_token: resetToken,
+    new_password: newPassword,
+  });
+  return response.data;
+};
+
+export const changePassword = async (currentPassword, newPassword) => {
+  const response = await api.post('/api/auth/change-password', {
+    current_password: currentPassword,
+    new_password: newPassword,
+  });
+  return response.data;
+};
+
+export const updateUserProfile = async (updates) => {
+  const response = await api.put('/api/auth/profile', updates);
+  return response.data;
+};
+
+// ============================================================================
 // Legacy API functions (kept for backward compatibility with other pages)
 // ============================================================================
 
 export const triggerCredit = async (userId = 'demo-user-001') => {
-  try {
-    const response = await api.post('/trigger', { userId });
-    return response.data;
-  } catch (err) {
-    console.warn('triggerCredit fallback:', err.message);
-    return {
-      approved: true,
-      creditAmount: 212500,
-      riskScore: 780,
-      riskLevel: 'LOW',
-      featureImportance: { payment_consistency: 0.92, business_tenure: 0.85, txn_volume: 0.78 },
-      processingMs: 850,
-    };
-  }
+  const response = await api.post('/api/trigger', { userId });
+  return response.data;
 };
 
 export const getTransactions = async (userId = 'demo-user-001') => {
   try {
-    const response = await api.get(`/transactions/${userId}`);
+    const response = await api.get(`/api/transactions/${userId}`);
     return response.data;
   } catch (err) {
     console.warn('getTransactions fallback:', err.message);
@@ -303,7 +332,7 @@ export const getTransactions = async (userId = 'demo-user-001') => {
 
 export const downloadReconciliation = async () => {
   try {
-    const response = await api.get('/reconciliation/download', {
+    const response = await api.get('/api/reconciliation/download', {
       responseType: 'arraybuffer',
     });
     return response.data;
@@ -315,7 +344,7 @@ export const downloadReconciliation = async () => {
 
 export const getLatestTrackingSnapshot = async () => {
   try {
-    const response = await api.get('/tracking/latest');
+    const response = await api.get('/api/tracking/latest');
     return response.data;
   } catch (err) {
     console.warn('getLatestTrackingSnapshot fallback:', err.message);
@@ -332,87 +361,33 @@ export const getLatestTrackingSnapshot = async () => {
 
 // Legacy invoice APIs (used by other pages that bypass Alibaba)
 export const uploadInvoice = async (file, userId = 'demo-user-001') => {
-  try {
-    const base64 = await new Promise((resolve, reject) => {
-      const reader = new FileReader();
-      reader.onloadend = () => resolve(reader.result.split(',')[1]);
-      reader.onerror = reject;
-      reader.readAsDataURL(file);
-    });
-    const response = await api.post('/invoice/upload', {
-      userId,
-      fileBase64: base64,
-      fileName: file.name,
-    });
-    return response.data;
-  } catch (err) {
-    console.warn('uploadInvoice fallback:', err.message);
-    return {
-      invoiceId: 'INV-FALLBACK-001',
-      extractedData: {
-        vendor_name: 'Syarikat ABC Sdn Bhd',
-        buyer_name: 'XYZ Trading',
-        invoice_number: 'INV-12345',
-        invoice_date: '2026-04-01',
-        due_date: '2026-05-15',
-        amount: 15000,
-        currency: 'RM',
-        line_items: [{ description: 'Goods / Services', quantity: 1, unit_price: 15000, total: 15000 }],
-      },
-      status: 'PENDING_REVIEW',
-      uploadedAt: Date.now(),
-    };
-  }
+  const base64 = await new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onloadend = () => resolve(reader.result.split(',')[1]);
+    reader.onerror = reject;
+    reader.readAsDataURL(file);
+  });
+  const response = await api.post('/api/invoice/upload', {
+    userId,
+    fileBase64: base64,
+    fileName: file.name,
+  });
+  return response.data;
 };
 
 export const analyzeInvoice = async (invoiceId, userId = 'demo-user-001') => {
-  try {
-    const response = await api.post('/invoice/analyze', { userId, invoiceId });
-    return response.data;
-  } catch (err) {
-    console.warn('analyzeInvoice fallback:', err.message);
-    return {
-      invoiceId,
-      fraudRisk: 'LOW',
-      fraudFlags: [],
-      creditScore: 720,
-      riskTier: 'LOW',
-      riskFactors: { payment_consistency: 0.92, business_tenure: 0.85, txn_volume: 0.78, avg_invoice_size: 0.65, monthly_revenue: 0.72 },
-      status: 'ANALYZED',
-    };
-  }
+  const response = await api.post('/api/invoice/analyze', { userId, invoiceId });
+  return response.data;
 };
 
 export const getOffer = async (invoiceId, userId = 'demo-user-001') => {
-  try {
-    const response = await api.post('/invoice/offer', { userId, invoiceId });
-    return response.data;
-  } catch (err) {
-    console.warn('getOffer fallback:', err.message);
-    return {
-      invoiceId,
-      offer: {
-        offerId: 'OFF-FALLBACK-001',
-        invoiceAmount: 15000,
-        advanceRate: 0.95,
-        offerAmount: 14250,
-        baseRate: 0.02,
-        riskPremium: 0.01,
-        totalFeeRate: 0.03,
-        factoringFee: 450,
-        netDisbursement: 13800,
-        estimatedRepaymentDate: '2026-05-15',
-        creditScore: 720,
-        offeredAt: Date.now(),
-      },
-      status: 'OFFER_MADE',
-    };
-  }
+  const response = await api.post('/api/invoice/offer', { userId, invoiceId });
+  return response.data;
 };
 
 export const listInvoices = async (userId = 'demo-user-001') => {
   try {
-    const response = await api.get(`/invoices/${userId}`);
+    const response = await api.get(`/api/invoices/${userId}`);
     return response.data;
   } catch (err) {
     console.warn('listInvoices fallback:', err.message);
@@ -440,7 +415,7 @@ export const listInvoices = async (userId = 'demo-user-001') => {
 // Shipment tracking APIs
 export const trackShipment = async (shipmentId) => {
   try {
-    const response = await api.post('/shipment/track', { shipmentId });
+    const response = await api.post('/api/shipment/track', { shipmentId });
     return response.data;
   } catch (err) {
     console.warn('trackShipment fallback:', err.message);
@@ -465,7 +440,7 @@ export const trackShipment = async (shipmentId) => {
 
 export const verifyShipment = async (shipmentId, shipmentValue = 50000) => {
   try {
-    const response = await api.post('/shipment/verify', { shipmentId, shipmentValue });
+    const response = await api.post('/api/shipment/verify', { shipmentId, shipmentValue });
     return response.data;
   } catch (err) {
     console.warn('verifyShipment fallback:', err.message);
@@ -490,28 +465,8 @@ export const verifyShipment = async (shipmentId, shipmentValue = 50000) => {
 
 // Analytics API
 export const getAnalytics = async (userId = 'demo-user-001') => {
-  try {
-    const response = await api.get(`/analytics/${userId}`);
-    return response.data;
-  } catch (err) {
-    console.warn('getAnalytics fallback:', err.message);
-    return {
-      userId,
-      totalFinanced: 368000,
-      totalRepaid: 245000,
-      activeInvoices: 3,
-      avgFactoringRate: 0.028,
-      cashFlowSummary: [
-        { month: '2025-11', disbursements: 45000 },
-        { month: '2025-12', disbursements: 62000 },
-        { month: '2026-01', disbursements: 38000 },
-        { month: '2026-02', disbursements: 71000 },
-        { month: '2026-03', disbursements: 55000 },
-        { month: '2026-04', disbursements: 97000 },
-      ],
-      utilizationRate: 0.42,
-    };
-  }
+  const response = await api.get(`/api/analytics/${userId}`);
+  return response.data;
 };
 
 // ============================================================================
@@ -582,7 +537,7 @@ export const getDashboardData = async (userId = 'demo-user-001') => {
 // ============================================================================
 export const listShipments = async (userId = 'demo-user-001') => {
   try {
-    const response = await api.get(`/shipments/${userId}`);
+    const response = await api.get(`/api/shipments/${userId}`);
     return response.data;
   } catch (err) {
     console.warn('listShipments fallback:', err.message);
@@ -643,7 +598,7 @@ export const listShipments = async (userId = 'demo-user-001') => {
 // ============================================================================
 export const getAuditTrail = async (userId = 'demo-user-001') => {
   try {
-    const response = await api.get(`/audit/${userId}`);
+    const response = await api.get(`/api/audit/${userId}`);
     return response.data;
   } catch (err) {
     console.warn('getAuditTrail fallback:', err.message);
@@ -675,7 +630,7 @@ export const getAuditTrail = async (userId = 'demo-user-001') => {
 // ============================================================================
 export const queryAIAssistant = async (message, history = []) => {
   try {
-    const response = await api.post('/ai/chat', { message, history });
+    const response = await api.post('/api/ai/chat', { message, history });
     return response.data;
   } catch (err) {
     console.warn('queryAIAssistant fallback:', err.message);
@@ -688,7 +643,7 @@ export const queryAIAssistant = async (message, history = []) => {
 // ============================================================================
 export const getAdminOverview = async () => {
   try {
-    const response = await api.get('/admin/overview');
+    const response = await api.get('/api/admin/overview');
     return response.data;
   } catch (err) {
     console.warn('getAdminOverview fallback:', err.message);

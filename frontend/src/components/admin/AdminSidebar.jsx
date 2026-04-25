@@ -64,7 +64,7 @@ export default function AdminSidebar() {
               <User className="h-5 w-5 text-white" />
             </div>
             <div className="min-w-0 flex-1">
-              <p className="truncate text-sm font-medium text-white">{userProfile?.email || 'admin@pantasflow.com'}</p>
+              <p className="truncate text-sm font-medium text-white">{userProfile?.email || 'admin@outandin.com'}</p>
               <p className="text-xs uppercase tracking-[0.18em] text-slate-400">{userProfile?.role || 'Admin'}</p>
             </div>
           </div>
@@ -113,7 +113,7 @@ export default function AdminSidebar() {
                   <Shield className="h-5 w-5 text-white" />
                 </div>
                 <div>
-                  <h1 className="text-sm font-bold">PantasFlow Admin</h1>
+                  <h1 className="text-sm font-bold">OUT&IN Admin</h1>
                   <p className="text-[10px] uppercase tracking-[0.24em] text-slate-400">Operations</p>
                 </div>
               </div>
@@ -138,7 +138,7 @@ export default function AdminSidebar() {
             </div>
             <div className="min-w-0 flex-1">
               <div className="flex items-center gap-2">
-                <h1 className="text-base font-bold">PantasFlow Admin</h1>
+                <h1 className="text-base font-bold">OUT&IN Admin</h1>
                 <span className="inline-flex items-center gap-1 rounded-full bg-cyan-400/10 px-2 py-1 text-[10px] uppercase tracking-[0.2em] text-cyan-200">
                   <Sparkles className="h-3 w-3" />
                   Monitor

@@ -1,10 +1,11 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate, Link, useSearchParams } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
+import { forgotPassword, resetPassword } from '../lib/api';
 import AuthLayout from '../components/auth/AuthLayout';
 
-const DEMO_SME = { email: 'user@pantasflow.com', password: 'Demo@123' };
-const DEMO_ADMIN = { email: 'admin@pantasflow.com', password: 'Admin@123' };
+const DEMO_SME = { email: 'user@outandin.com', password: 'Demo@123' };
+const DEMO_ADMIN = { email: 'admin@outandin.com', password: 'Admin@123' };
 
 const Login = () => {
   const [email, setEmail] = useState(() => localStorage.getItem('pf_remember_email') || '');
@@ -13,6 +14,17 @@ const Login = () => {
   const [rememberMe, setRememberMe] = useState(() => !!localStorage.getItem('pf_remember_email'));
   const [failedAttempts, setFailedAttempts] = useState(0);
   const [cooldown, setCooldown] = useState(0);
+
+  // Forgot password state
+  const [showForgot, setShowForgot] = useState(false);
+  const [forgotEmail, setForgotEmail] = useState('');
+  const [forgotLoading, setForgotLoading] = useState(false);
+  const [forgotError, setForgotError] = useState('');
+  const [resetData, setResetData] = useState(null); // { resetToken, tempPassword }
+  const [newPassword, setNewPassword] = useState('');
+  const [resetLoading, setResetLoading] = useState(false);
+  const [resetError, setResetError] = useState('');
+  const [resetSuccess, setResetSuccess] = useState(false);
 
   const { login, isLoading, error, clearError } = useAuth();
   const navigate = useNavigate();
@@ -64,6 +76,38 @@ const Login = () => {
     clearError();
   };
 
+  const handleForgotPassword = async (e) => {
+    e.preventDefault();
+    setForgotLoading(true);
+    setForgotError('');
+    try {
+      const data = await forgotPassword(forgotEmail);
+      if (data.resetToken) {
+        setResetData({ resetToken: data.resetToken, tempPassword: data.tempPassword });
+      } else {
+        setForgotError('If an account exists, a reset code has been sent.');
+      }
+    } catch (err) {
+      setForgotError(err.friendlyMessage || 'Failed to request password reset.');
+    } finally {
+      setForgotLoading(false);
+    }
+  };
+
+  const handleResetPassword = async (e) => {
+    e.preventDefault();
+    setResetLoading(true);
+    setResetError('');
+    try {
+      await resetPassword(forgotEmail, resetData.resetToken, newPassword);
+      setResetSuccess(true);
+    } catch (err) {
+      setResetError(err.friendlyMessage || 'Failed to reset password.');
+    } finally {
+      setResetLoading(false);
+    }
+  };
+
   return (
     <AuthLayout>
       {/* Logo + brand */}
@@ -73,7 +117,7 @@ const Login = () => {
             <path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5" stroke="white" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
           </svg>
         </div>
-        <span style={{ color: 'white', fontWeight: 700, fontSize: '18px', letterSpacing: '-0.01em' }}>PantasFlow</span>
+        <span style={{ color: 'white', fontWeight: 700, fontSize: '18px', letterSpacing: '-0.01em' }}>OUT&IN</span>
       </div>
 
       <h2 className="auth-card-delay-1" style={{ fontSize: '24px', fontWeight: 700, color: 'white', marginTop: '28px', marginBottom: '6px' }}>
@@ -119,8 +163,8 @@ const Login = () => {
               Password
             </label>
             <span
+              onClick={() => { setShowForgot(true); setForgotEmail(email); }}
               style={{ fontSize: '12px', color: '#60A5FA', cursor: 'pointer' }}
-              title="Contact your administrator to reset your password"
             >
               Forgot password?
             </span>
@@ -292,6 +336,81 @@ const Login = () => {
         <span style={{ color: 'rgba(255,255,255,0.15)' }}>|</span>
         <span>SSM Verified</span>
       </div>
+
+      {/* Forgot Password Modal */}
+      {showForgot && (
+        <div style={{ position: 'fixed', inset: 0, zIndex: 50, display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'rgba(0,0,0,0.6)', backdropFilter: 'blur(4px)' }}>
+          <div style={{ background: '#111827', border: '1px solid rgba(255,255,255,0.1)', borderRadius: '16px', padding: '32px', width: '100%', maxWidth: '420px', margin: '16px' }}>
+            {!resetData && !resetSuccess && (
+              <>
+                <h3 style={{ fontSize: '18px', fontWeight: 700, color: 'white', marginBottom: '8px' }}>Reset Your Password</h3>
+                <p style={{ fontSize: '13px', color: 'rgba(255,255,255,0.5)', marginBottom: '20px' }}>Enter your email and we'll generate a secure temporary password for you.</p>
+                <form onSubmit={handleForgotPassword} style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+                  <input
+                    type="email"
+                    required
+                    value={forgotEmail}
+                    onChange={(e) => setForgotEmail(e.target.value)}
+                    placeholder="you@company.com"
+                    className="auth-input"
+                  />
+                  {forgotError && <p style={{ fontSize: '12px', color: '#FCA5A5' }}>{forgotError}</p>}
+                  <div style={{ display: 'flex', gap: '8px' }}>
+                    <button type="submit" disabled={forgotLoading} style={{ flex: 1, padding: '10px', background: '#2563EB', color: 'white', borderRadius: '8px', fontSize: '14px', fontWeight: 600, border: 'none', cursor: forgotLoading ? 'not-allowed' : 'pointer' }}>
+                      {forgotLoading ? 'Generating...' : 'Generate Reset Code'}
+                    </button>
+                    <button type="button" onClick={() => { setShowForgot(false); setResetData(null); setResetSuccess(false); setForgotError(''); }} style={{ padding: '10px 16px', background: 'transparent', color: 'rgba(255,255,255,0.5)', borderRadius: '8px', fontSize: '14px', border: '1px solid rgba(255,255,255,0.1)', cursor: 'pointer' }}>
+                      Cancel
+                    </button>
+                  </div>
+                </form>
+              </>
+            )}
+
+            {resetData && !resetSuccess && (
+              <>
+                <h3 style={{ fontSize: '18px', fontWeight: 700, color: 'white', marginBottom: '8px' }}>Set New Password</h3>
+                <div style={{ background: 'rgba(34,197,94,0.08)', border: '1px solid rgba(34,197,94,0.2)', borderRadius: '8px', padding: '12px', marginBottom: '16px' }}>
+                  <p style={{ fontSize: '11px', color: 'rgba(255,255,255,0.4)', marginBottom: '4px' }}>Your temporary password (auto-generated):</p>
+                  <p style={{ fontSize: '16px', fontFamily: 'monospace', color: '#4ADE80', fontWeight: 700, letterSpacing: '0.5px' }}>{resetData.tempPassword}</p>
+                </div>
+                <p style={{ fontSize: '13px', color: 'rgba(255,255,255,0.5)', marginBottom: '12px' }}>Set a new password below. Must be 8+ chars with uppercase, lowercase, digit, and special character.</p>
+                <form onSubmit={handleResetPassword} style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+                  <input
+                    type="password"
+                    required
+                    minLength={8}
+                    value={newPassword}
+                    onChange={(e) => setNewPassword(e.target.value)}
+                    placeholder="New password"
+                    className="auth-input"
+                  />
+                  {resetError && <p style={{ fontSize: '12px', color: '#FCA5A5' }}>{resetError}</p>}
+                  <button type="submit" disabled={resetLoading} style={{ width: '100%', padding: '10px', background: '#16A34A', color: 'white', borderRadius: '8px', fontSize: '14px', fontWeight: 600, border: 'none', cursor: resetLoading ? 'not-allowed' : 'pointer' }}>
+                    {resetLoading ? 'Resetting...' : 'Reset Password'}
+                  </button>
+                </form>
+              </>
+            )}
+
+            {resetSuccess && (
+              <div style={{ textAlign: 'center' }}>
+                <div style={{ width: '48px', height: '48px', borderRadius: '50%', background: 'rgba(34,197,94,0.1)', display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 16px' }}>
+                  <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#22C55E" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
+                </div>
+                <h3 style={{ fontSize: '18px', fontWeight: 700, color: 'white', marginBottom: '8px' }}>Password Reset!</h3>
+                <p style={{ fontSize: '13px', color: 'rgba(255,255,255,0.5)', marginBottom: '20px' }}>You can now sign in with your new password.</p>
+                <button
+                  onClick={() => { setShowForgot(false); setResetData(null); setResetSuccess(false); setPassword(''); setEmail(forgotEmail); }}
+                  style={{ width: '100%', padding: '10px', background: '#2563EB', color: 'white', borderRadius: '8px', fontSize: '14px', fontWeight: 600, border: 'none', cursor: 'pointer' }}
+                >
+                  Back to Sign In
+                </button>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
     </AuthLayout>
   );
 };

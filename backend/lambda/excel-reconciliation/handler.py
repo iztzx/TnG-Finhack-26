@@ -5,6 +5,7 @@ import time
 import base64
 import decimal
 from io import BytesIO
+from datetime import datetime, timezone, timedelta
 
 from openpyxl import Workbook
 from openpyxl.styles import Font, PatternFill, Alignment, Border, Side, numbers
@@ -13,13 +14,17 @@ from openpyxl.formatting.rule import FormulaRule
 from openpyxl.chart import PieChart, Reference
 from openpyxl.chart.label import DataLabelList
 from openpyxl.worksheet.datavalidation import DataValidation
+from boto3.dynamodb.conditions import Attr
 
 dynamodb = boto3.resource('dynamodb')
 txn_table = dynamodb.Table(os.environ.get('TXN_TABLE', 'tng-finhack-transactions'))
 risk_table = dynamodb.Table(os.environ.get('RISK_TABLE', 'tng-finhack-risk-scores'))
 
+MAX_SCAN_ITEMS = int(os.environ.get('RECONCILIATION_MAX_ITEMS', '10000'))
+DEFAULT_LOOKBACK_DAYS = int(os.environ.get('RECONCILIATION_LOOKBACK_DAYS', '90'))
+
 CORS_HEADERS = {
-    'Access-Control-Allow-Origin': '*',
+    'Access-Control-Allow-Origin': os.environ.get('ALLOWED_ORIGIN', '*'),
     'Access-Control-Allow-Headers': 'Content-Type,X-Amz-Date,Authorization',
     'Access-Control-Allow-Methods': 'GET,OPTIONS',
     'Content-Type': 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
@@ -45,23 +50,51 @@ CENTER_ALIGN = Alignment(horizontal='center', vertical='center')
 LEFT_ALIGN = Alignment(horizontal='left', vertical='center')
 
 
+def _epoch_ms_cutoff(days: int) -> str:
+    """Return the epoch timestamp in milliseconds as a string for DynamoDB filtering."""
+    dt = datetime.now(timezone.utc) - timedelta(days=days)
+    return str(int(dt.timestamp() * 1000))
+
+
 def fetch_all_transactions():
+    """Fetch transactions with time-range filtering and a hard item limit.
+
+    Uses FilterExpression to restrict results to the last N days,
+    and sets a Limit on each Scan page to cap total read capacity.
+    """
     items = []
-    response = txn_table.scan()
+    cutoff = _epoch_ms_cutoff(DEFAULT_LOOKBACK_DAYS)
+    scan_kwargs = {
+        'FilterExpression': Attr('timestamp').gte(cutoff),
+        'Limit': MAX_SCAN_ITEMS,
+    }
+    response = txn_table.scan(**scan_kwargs)
     items.extend(response.get('Items', []))
-    while 'LastEvaluatedKey' in response:
-        response = txn_table.scan(ExclusiveStartKey=response['LastEvaluatedKey'])
+    while 'LastEvaluatedKey' in response and len(items) < MAX_SCAN_ITEMS:
+        scan_kwargs['ExclusiveStartKey'] = response['LastEvaluatedKey']
+        response = txn_table.scan(**scan_kwargs)
         items.extend(response.get('Items', []))
+        if len(items) > MAX_SCAN_ITEMS:
+            items = items[:MAX_SCAN_ITEMS]
+            break
     return items
 
 
 def fetch_all_risk_scores():
+    """Fetch risk scores with a hard item limit."""
     items = []
-    response = risk_table.scan()
+    scan_kwargs = {
+        'Limit': MAX_SCAN_ITEMS,
+    }
+    response = risk_table.scan(**scan_kwargs)
     items.extend(response.get('Items', []))
-    while 'LastEvaluatedKey' in response:
-        response = risk_table.scan(ExclusiveStartKey=response['LastEvaluatedKey'])
+    while 'LastEvaluatedKey' in response and len(items) < MAX_SCAN_ITEMS:
+        scan_kwargs['ExclusiveStartKey'] = response['LastEvaluatedKey']
+        response = risk_table.scan(**scan_kwargs)
         items.extend(response.get('Items', []))
+        if len(items) > MAX_SCAN_ITEMS:
+            items = items[:MAX_SCAN_ITEMS]
+            break
     return items
 
 
@@ -408,11 +441,7 @@ def handler(event, context):
     if method == 'OPTIONS':
         return {
             'statusCode': 200,
-            'headers': {
-                'Access-Control-Allow-Origin': '*',
-                'Access-Control-Allow-Headers': 'Content-Type,X-Amz-Date,Authorization',
-                'Access-Control-Allow-Methods': 'GET,OPTIONS'
-            },
+            'headers': CORS_HEADERS,
             'body': ''
         }
 
@@ -423,9 +452,7 @@ def handler(event, context):
         return {
             'statusCode': 200,
             'headers': {
-                'Access-Control-Allow-Origin': '*',
-                'Access-Control-Allow-Headers': 'Content-Type,X-Amz-Date,Authorization',
-                'Access-Control-Allow-Methods': 'GET,OPTIONS',
+                **CORS_HEADERS,
                 'Content-Type': 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
                 'Content-Disposition': 'attachment; filename="tng-finhack-reconciliation.xlsx"'
             },
@@ -436,10 +463,8 @@ def handler(event, context):
         return {
             'statusCode': 500,
             'headers': {
-                'Access-Control-Allow-Origin': '*',
-                'Access-Control-Allow-Headers': 'Content-Type,X-Amz-Date,Authorization',
-                'Access-Control-Allow-Methods': 'GET,OPTIONS',
-                'Content-Type': 'application/json'
+                **CORS_HEADERS,
+                'Content-Type': 'application/json',
             },
             'body': json.dumps({'error': str(e)})
         }

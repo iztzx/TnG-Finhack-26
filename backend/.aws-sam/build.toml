@@ -27,4 +27,22 @@ manifest_hash = ""
 packagetype = "Zip"
 functions = ["AuthFunction"]
 
+[function_build_definitions.fc2b0198-abf4-45f4-8c1f-d210d1a7ba71]
+codeuri = "C:\\TNGFinhack26\\TnG-Finhack-26\\backend\\lambda\\credit-scoring"
+runtime = "python3.12"
+architecture = "x86_64"
+handler = "handler.handler"
+manifest_hash = ""
+packagetype = "Zip"
+functions = ["ScoringFunction"]
+
+[function_build_definitions.842a9745-c130-4a82-bb38-9c7454771641]
+codeuri = "C:\\TNGFinhack26\\TnG-Finhack-26\\backend\\lambda\\excel-reconciliation"
+runtime = "python3.12"
+architecture = "x86_64"
+handler = "handler.handler"
+manifest_hash = ""
+packagetype = "Zip"
+functions = ["ReconciliationFunction"]
+
 [layer_build_definitions]

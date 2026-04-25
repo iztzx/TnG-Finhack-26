@@ -13,6 +13,11 @@ Parameters:
     Description: JWT signing secret for auth tokens. Set via --parameter-overrides
       or samconfig.toml.
     MinLength: 16
+  AllowedOrigin:
+    Type: String
+    Default: '*'
+    Description: CORS allowed origin for API responses. Use '*' for dev; restrict
+      to your frontend domain in production.
 Globals:
   Function:
     Runtime: python3.12
@@ -32,7 +37,7 @@ Resources:
       CorsConfiguration:
         CorsRules:
         - AllowedOrigins:
-          - '*'
+          - Ref: AllowedOrigin
           AllowedMethods:
           - GET
           - PUT
@@ -152,9 +157,74 @@ Resources:
       AttributeDefinitions:
       - AttributeName: id
         AttributeType: S
+      - AttributeName: smeId
+        AttributeType: S
       KeySchema:
       - AttributeName: id
         KeyType: HASH
+      GlobalSecondaryIndexes:
+      - IndexName: SmeIdIndex
+        KeySchema:
+        - AttributeName: smeId
+          KeyType: HASH
+        Projection:
+          ProjectionType: ALL
+      SSESpecification:
+        SSEEnabled: true
+      PointInTimeRecoverySpecification:
+        PointInTimeRecoveryEnabled: true
+      Tags:
+      - Key: Project
+        Value: TnG-FinHack-26
+      - Key: Environment
+        Value:
+          Ref: Environment
+  LegacyTransactionsTable:
+    Type: AWS::DynamoDB::Table
+    DeletionPolicy: Retain
+    UpdateReplacePolicy: Retain
+    Properties:
+      TableName:
+        Fn::Sub: tng-finhack-${Environment}-legacy-transactions
+      BillingMode: PAY_PER_REQUEST
+      AttributeDefinitions:
+      - AttributeName: userId
+        AttributeType: S
+      - AttributeName: timestamp
+        AttributeType: S
+      KeySchema:
+      - AttributeName: userId
+        KeyType: HASH
+      - AttributeName: timestamp
+        KeyType: RANGE
+      SSESpecification:
+        SSEEnabled: true
+      PointInTimeRecoverySpecification:
+        PointInTimeRecoveryEnabled: true
+      Tags:
+      - Key: Project
+        Value: TnG-FinHack-26
+      - Key: Environment
+        Value:
+          Ref: Environment
+  LegacyInvoicesTable:
+    Type: AWS::DynamoDB::Table
+    DeletionPolicy: Retain
+    UpdateReplacePolicy: Retain
+    Properties:
+      TableName:
+        Fn::Sub: tng-finhack-${Environment}-legacy-invoices
+      BillingMode: PAY_PER_REQUEST
+      AttributeDefinitions:
+      - AttributeName: userId
+        AttributeType: S
+      - AttributeName: invoiceId
+        AttributeType: S
+      KeySchema:
+      - AttributeName: userId
+        KeyType: HASH
+      - AttributeName: invoiceId
+        KeyType: RANGE
       SSESpecification:
         SSEEnabled: true
       PointInTimeRecoverySpecification:
@@ -186,7 +256,9 @@ Resources:
           OFFERS_TABLE:
             Ref: OffersTable
           LOG_LEVEL: INFO
-          ML_MODEL_DIR: /opt/ml/models
+          ML_MODEL_DIR: /opt/python/ml/models
+          ALLOWED_ORIGIN:
+            Ref: AllowedOrigin
       Timeout: 30
       MemorySize: 256
       Events:
@@ -206,8 +278,15 @@ Resources:
         Ref: Environment
       Cors:
         AllowMethods: '''POST,GET,OPTIONS'''
-        AllowOrigin: '''*'''
+        AllowOrigin:
+          Fn::Sub: '''${AllowedOrigin}'''
         AllowHeaders: '''Content-Type,X-Amz-Date,Authorization'''
+      MethodSettings:
+      - ResourcePath: /*
+        HttpMethod: '*'
+        ThrottlingBurstLimit: 50
+        ThrottlingRateLimit: 25
+        MetricsEnabled: true
   InvoiceWebhookFunctionRole:
     Type: AWS::IAM::Role
     Properties:
@@ -264,6 +343,8 @@ Resources:
           JWT_SECRET:
             Ref: JwtSecret
           LOG_LEVEL: INFO
+          ALLOWED_ORIGIN:
+            Ref: AllowedOrigin
       Timeout: 30
       MemorySize: 256
       Events:
@@ -288,8 +369,135 @@ Resources:
             Method: GET
             RestApiId:
               Ref: TnGApiGateway
+        AuthForgotPassword:
+          Type: Api
+          Properties:
+            Path: /api/auth/forgot-password
+            Method: POST
+            RestApiId:
+              Ref: TnGApiGateway
+        AuthResetPassword:
+          Type: Api
+          Properties:
+            Path: /api/auth/reset-password
+            Method: POST
+            RestApiId:
+              Ref: TnGApiGateway
+        AuthChangePassword:
+          Type: Api
+          Properties:
+            Path: /api/auth/change-password
+            Method: POST
+            RestApiId:
+              Ref: TnGApiGateway
     Metadata:
       SamResourceId: AuthFunction
+  ScoringFunction:
+    Type: AWS::Serverless::Function
+    Description: Legacy credit scoring, invoice lifecycle, shipment tracking, and
+      analytics endpoints.
+    Properties:
+      FunctionName:
+        Fn::Sub: tng-finhack-${Environment}-scoring
+      Handler: handler.handler
+      CodeUri: ScoringFunction
+      Role:
+        Fn::GetAtt:
+        - ScoringFunctionRole
+        - Arn
+      Environment:
+        Variables:
+          TXN_TABLE:
+            Ref: LegacyTransactionsTable
+          INVOICE_TABLE:
+            Ref: LegacyInvoicesTable
+          JWT_SECRET:
+            Ref: JwtSecret
+          LOG_LEVEL: INFO
+          ALLOWED_ORIGIN:
+            Ref: AllowedOrigin
+      Timeout: 30
+      MemorySize: 256
+      Events:
+        TriggerPost:
+          Type: Api
+          Properties:
+            Path: /trigger
+            Method: POST
+            RestApiId:
+              Ref: TnGApiGateway
+        TransactionsGet:
+          Type: Api
+          Properties:
+            Path: /transactions/{userId}
+            Method: GET
+            RestApiId:
+              Ref: TnGApiGateway
+        TelemetryGet:
+          Type: Api
+          Properties:
+            Path: /telemetry
+            Method: GET
+            RestApiId:
+              Ref: TnGApiGateway
+        InvoiceUploadPost:
+          Type: Api
+          Properties:
+            Path: /invoice/upload
+            Method: POST
+            RestApiId:
+              Ref: TnGApiGateway
+        InvoiceAnalyzePost:
+          Type: Api
+          Properties:
+            Path: /invoice/analyze
+            Method: POST
+            RestApiId:
+              Ref: TnGApiGateway
+        InvoiceOfferPost:
+          Type: Api
+          Properties:
+            Path: /invoice/offer
+            Method: POST
+            RestApiId:
+              Ref: TnGApiGateway
+        InvoiceAcceptPost:
+          Type: Api
+          Properties:
+            Path: /invoice/accept
+            Method: POST
+            RestApiId:
+              Ref: TnGApiGateway
+        InvoicesGet:
+          Type: Api
+          Properties:
+            Path: /invoices/{userId}
+            Method: GET
+            RestApiId:
+              Ref: TnGApiGateway
+        ShipmentTrackPost:
+          Type: Api
+          Properties:
+            Path: /shipment/track
+            Method: POST
+            RestApiId:
+              Ref: TnGApiGateway
+        ShipmentVerifyPost:
+          Type: Api
+          Properties:
+            Path: /shipment/verify
+            Method: POST
+            RestApiId:
+              Ref: TnGApiGateway
+        AnalyticsGet:
+          Type: Api
+          Properties:
+            Path: /analytics/{userId}
+            Method: GET
+            RestApiId:
+              Ref: TnGApiGateway
+    Metadata:
+      SamResourceId: ScoringFunction
   AuthFunctionRole:
     Type: AWS::IAM::Role
     Properties:
@@ -338,27 +546,27 @@ Resources:
         PolicyDocument:
           Version: '2012-10-17'
           Statement:
-          - Sid: ReadAndUpdateInvoices
+          - Sid: ReadWriteLegacyTransactions
             Effect: Allow
             Action:
+            - dynamodb:PutItem
+            - dynamodb:GetItem
+            - dynamodb:Query
+            Resource:
+              Fn::GetAtt:
+              - LegacyTransactionsTable
+              - Arn
+          - Sid: ReadWriteLegacyInvoices
+            Effect: Allow
+            Action:
+            - dynamodb:PutItem
             - dynamodb:GetItem
             - dynamodb:UpdateItem
             - dynamodb:Query
             Resource:
-            - Fn::GetAtt:
-              - InvoicesTable
+              Fn::GetAtt:
+              - LegacyInvoicesTable
               - Arn
-            - Fn::Sub: ${InvoicesTable.Arn}/index/SmeIdIndex
-          - Sid: CreateOffers
-            Effect: Allow
-            Action:
-            - dynamodb:PutItem
-            - dynamodb:Query
-            Resource:
-            - Fn::GetAtt:
-              - OffersTable
-              - Arn
-            - Fn::Sub: ${OffersTable.Arn}/index/SmeIdIndex
   DisburseFunction:
     Type: AWS::Serverless::Function
     Description: Accepts a financing offer, performs idempotent disbursement with
@@ -384,6 +592,8 @@ Resources:
             Ref: TransactionsTable
           LOG_LEVEL: INFO
           MOCK_PAYMENT_GATEWAY_DELAY: '1.5'
+          ALLOWED_ORIGIN:
+            Ref: AllowedOrigin
       Timeout: 30
       MemorySize: 256
       Events:
@@ -451,6 +661,37 @@ Resources:
               Fn::GetAtt:
               - TransactionsTable
               - Arn
+  ReconciliationFunction:
+    Type: AWS::Serverless::Function
+    Description: Generates Excel reconciliation reports from transaction ledger data.
+    Properties:
+      FunctionName:
+        Fn::Sub: tng-finhack-${Environment}-reconciliation
+      Handler: handler.handler
+      CodeUri: ReconciliationFunction
+      Role:
+        Fn::GetAtt:
+        - ReconciliationFunctionRole
+        - Arn
+      Environment:
+        Variables:
+          TXN_TABLE:
+            Ref: LegacyTransactionsTable
+          LOG_LEVEL: INFO
+          ALLOWED_ORIGIN:
+            Ref: AllowedOrigin
+      Timeout: 29
+      MemorySize: 512
+      Events:
+        ReconciliationDownload:
+          Type: Api
+          Properties:
+            Path: /reconciliation/download
+            Method: GET
+            RestApiId:
+              Ref: TnGApiGateway
+    Metadata:
+      SamResourceId: ReconciliationFunction
   ReconciliationFunctionRole:
     Type: AWS::IAM::Role
     Properties:
@@ -478,18 +719,7 @@ Resources:
             - dynamodb:Scan
             Resource:
             - Fn::GetAtt:
-              - UsersTable
-              - Arn
-            - Fn::GetAtt:
-              - InvoicesTable
-              - Arn
-            - Fn::Sub: ${InvoicesTable.Arn}/index/SmeIdIndex
-            - Fn::GetAtt:
-              - OffersTable
-              - Arn
-            - Fn::Sub: ${OffersTable.Arn}/index/SmeIdIndex
-            - Fn::GetAtt:
-              - TransactionsTable
+              - LegacyTransactionsTable
               - Arn
 Outputs:
   InvoiceUploadsBucketName:

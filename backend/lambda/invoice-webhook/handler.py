@@ -50,7 +50,7 @@ offers_table = dynamodb.Table(OFFERS_TABLE)
 # ---------------------------------------------------------------------------
 CORS_HEADERS = {
     "Content-Type": "application/json",
-    "Access-Control-Allow-Origin": "*",
+    "Access-Control-Allow-Origin": os.environ.get("ALLOWED_ORIGIN", "*"),
     "Access-Control-Allow-Headers": "Content-Type,X-Amz-Date,Authorization",
     "Access-Control-Allow-Methods": "POST,OPTIONS",
 }
@@ -133,11 +133,14 @@ class AlibabaWebhookPayload(BaseModel):
     Must match the JSON built in `post_to_aws_webhook()`.
     """
     invoiceId: str = Field(..., min_length=1, description="UUID assigned by Alibaba Cloud")
+    userId: Optional[str] = Field(None, description="Authenticated SME user ID (email) for wallet crediting")
     amount: float = Field(..., gt=0, description="Invoice amount forwarded from extractedData")
     status: str = Field("PENDING_SCORING", description="Status flag from Alibaba Cloud")
     extractedData: ExtractedData
     timestamp: str = Field(..., min_length=1, description="ISO-8601 timestamp from Alibaba")
     source: str = Field("alibaba_cloud_model_studio", description="Origin identifier")
+    shipmentNumber: Optional[str] = Field(None, description="Shipment tracking number for location verification")
+    contactEmail: Optional[str] = Field(None, description="Contact email for receivables assignment notifications")
 
     @field_validator("status")
     @classmethod
@@ -163,7 +166,7 @@ def _run_ml_scoring(payload: AlibabaWebhookPayload) -> dict:
         import joblib
         import numpy as np
 
-        model_dir = os.environ.get("ML_MODEL_DIR", "/opt/ml/models")
+        model_dir = os.environ.get("ML_MODEL_DIR", "/opt/python/ml/models")
         classifier_path = os.path.join(model_dir, "credit_classifier.pkl")
         regressor_path = os.path.join(model_dir, "credit_regressor.pkl")
 
@@ -270,7 +273,7 @@ def _heuristic_score(payload: AlibabaWebhookPayload) -> dict:
 # Offer generation
 # ===================================================================
 
-def _generate_offer(payload: AlibabaWebhookPayload, scoring: dict) -> dict:
+def _generate_offer(payload: AlibabaWebhookPayload, scoring: dict, sme_id: str) -> dict:
     """Build the financing offer record from scoring results."""
     offer_id = f"OFF-{uuid.uuid4().hex[:10].upper()}"
     amount = payload.amount
@@ -292,7 +295,7 @@ def _generate_offer(payload: AlibabaWebhookPayload, scoring: dict) -> dict:
     return {
         "id": offer_id,
         "invoiceId": payload.invoiceId,
-        "smeId": payload.extractedData.merchantName,
+        "smeId": sme_id,
         "invoiceAmount": amount,
         "advanceRate": advance_rate,
         "offerAmount": offer_amount,
@@ -383,9 +386,11 @@ def handler(event, context):
     # ------------------------------------------------------------------
     now_utc = datetime.now(timezone.utc).isoformat()
 
+    sme_id = payload.userId or payload.extractedData.merchantName
+
     invoice_item = {
         "id": payload.invoiceId,
-        "smeId": payload.extractedData.merchantName,
+        "smeId": sme_id,
         "amount": payload.amount,
         "currency": payload.extractedData.currency,
         "status": "SCORING_IN_PROGRESS",
@@ -395,9 +400,16 @@ def handler(event, context):
         "createdAt": now_utc,
         "updatedAt": now_utc,
     }
+    if payload.shipmentNumber:
+        invoice_item["shipmentNumber"] = payload.shipmentNumber
+    if payload.contactEmail:
+        invoice_item["contactEmail"] = payload.contactEmail
 
     try:
-        invoices_table.put_item(Item=_to_dynamo(invoice_item))
+        invoices_table.put_item(
+            Item=_to_dynamo(invoice_item),
+            ConditionExpression="attribute_not_exists(id)",
+        )
     except Exception as exc:
         logger.error("Failed to save invoice to DynamoDB", extra={
             "invoiceId": payload.invoiceId,
@@ -418,7 +430,7 @@ def handler(event, context):
     # ------------------------------------------------------------------
     # 4. Generate & persist financing offer
     # ------------------------------------------------------------------
-    offer = _generate_offer(payload, scoring)
+    offer = _generate_offer(payload, scoring, sme_id)
 
     try:
         offers_table.put_item(Item=_to_dynamo(offer))

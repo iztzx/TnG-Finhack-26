@@ -4,7 +4,7 @@ import confetti from 'canvas-confetti';
 import {
   Upload, FileText, Truck, CheckCircle, X, Zap, Shield, AlertTriangle,
   Banknote, Package, Cloud, Cpu, RefreshCw, AlertCircle, ArrowRight,
-  TrendingUp, Wallet,
+  TrendingUp, Wallet, Info, Mail,
 } from 'lucide-react';
 import RiskGauge from '../components/RiskGauge';
 import { uploadToAlibaba, getScoringOffer, acceptOffer, trackShipment, verifyShipment } from '../lib/api';
@@ -90,6 +90,7 @@ function OfferSkeleton() {
 // Main Financing page
 // ============================================================================
 export default function Financing() {
+  const fileInputRef = useRef(null);
   const [activeTab, setActiveTab] = useState('invoice');
 
   // Invoice flow – state machine
@@ -101,6 +102,11 @@ export default function Financing() {
   const [disbursement, setDisbursement] = useState(null);
   const [errorMessage, setErrorMessage] = useState('');
   const [pollAttempt, setPollAttempt] = useState(0);
+
+  // Invoice metadata inputs
+  const [shipmentNumber, setShipmentNumber] = useState('');
+  const [contactEmail, setContactEmail] = useState('');
+  const [emailSent, setEmailSent] = useState(false);
 
   // Shipment flow state
   const [shipmentId, setShipmentId] = useState('');
@@ -123,6 +129,9 @@ export default function Financing() {
     setDisbursement(null);
     setErrorMessage('');
     setPollAttempt(0);
+    setShipmentNumber('');
+    setContactEmail('');
+    setEmailSent(false);
   }, []);
 
   const handleDrop = useCallback((e) => {
@@ -150,7 +159,7 @@ export default function Financing() {
 
     try {
       // Phase 1: Upload to Alibaba Cloud for Document AI extraction
-      const alibabaResult = await uploadToAlibaba(file);
+      const alibabaResult = await uploadToAlibaba(file, '', shipmentNumber, contactEmail);
       setInvoiceId(alibabaResult.invoiceId);
       setExtractedData(alibabaResult.extractedData);
 
@@ -175,6 +184,8 @@ export default function Financing() {
           scoringMethod: o.scoringMethod,
         });
         setFlowState(FlowState.OFFER_READY);
+        // Refresh transactions list so the new invoice appears
+        window.dispatchEvent(new CustomEvent('transactions:refresh'));
       } else {
         // Fallback: poll AWS for the scoring offer (async webhook)
         setFlowState(FlowState.POLLING_AWS_SCORING);
@@ -331,6 +342,10 @@ export default function Financing() {
                     Drag & drop your invoice PDF or image here, or click to browse.
                     Processed by Alibaba Cloud Document AI.
                   </p>
+                  <div className="mt-2 inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-blue-50 text-blue-700 text-xs">
+                    <Info className="w-3 h-3" />
+                    Invoice documents only (Tax, Commercial, Proforma)
+                  </div>
                   <input
                     ref={fileInputRef}
                     type="file"
@@ -353,6 +368,32 @@ export default function Financing() {
                       </button>
                     </div>
                   )}
+
+                  {file && (
+                    <div className="mt-4 w-full max-w-md space-y-3">
+                      <div>
+                        <label className="block text-xs font-medium text-gray-600 mb-1">Shipment Number (for tracking)</label>
+                        <input
+                          type="text"
+                          value={shipmentNumber}
+                          onChange={(e) => setShipmentNumber(e.target.value)}
+                          placeholder="e.g. SHP-7781"
+                          className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-tng-blue/20"
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-xs font-medium text-gray-600 mb-1">Contact Email</label>
+                        <input
+                          type="email"
+                          value={contactEmail}
+                          onChange={(e) => setContactEmail(e.target.value)}
+                          placeholder="you@company.com"
+                          className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-tng-blue/20"
+                        />
+                      </div>
+                    </div>
+                  )}
+
                   {file && (
                     <button
                       onClick={processInvoice}
@@ -649,6 +690,30 @@ export default function Financing() {
                     </span>
                   </div>
                 )}
+
+                {/* Email notification */}
+                {!emailSent && contactEmail && (
+                  <div className="mt-5 w-full max-w-md rounded-xl border border-blue-100 bg-blue-50/50 p-4 text-left">
+                    <p className="text-xs font-semibold text-blue-800 uppercase tracking-wide">Email Notification</p>
+                    <p className="mt-1 text-sm text-blue-700">
+                      We will send an email to <strong>{contactEmail}</strong> confirming that the assignment of receivables in Malaysia is governed primarily by common law principles, as adopted under <strong>Section 3(1) of the Civil Law Act 1956</strong>, and is now assigned to <strong>OUT&IN</strong>.
+                    </p>
+                    <button
+                      onClick={() => setEmailSent(true)}
+                      className="mt-3 inline-flex items-center gap-1.5 px-3 py-1.5 bg-tng-blue text-white rounded-lg text-xs font-medium hover:bg-tng-blue-dark transition-colors"
+                    >
+                      <Mail className="w-3.5 h-3.5" />
+                      Send Confirmation Email
+                    </button>
+                  </div>
+                )}
+                {emailSent && (
+                  <div className="mt-5 inline-flex items-center gap-2 px-4 py-2 bg-green-50 rounded-lg">
+                    <CheckCircle className="w-4 h-4 text-green-600" />
+                    <span className="text-sm font-medium text-green-700">Confirmation email sent to {contactEmail}</span>
+                  </div>
+                )}
+
                 <div className="mt-6 flex gap-3">
                   <button
                     onClick={resetInvoiceFlow}

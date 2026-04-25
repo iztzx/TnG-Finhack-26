@@ -8,7 +8,11 @@ export const API_BASE_URL = isDev
   : (import.meta.env.VITE_API_BASE_URL || 'https://YOUR-API-ID.execute-api.ap-southeast-1.amazonaws.com/Prod');
 
 // Alibaba Cloud Function Compute URL for invoice upload + Document AI extraction
-export const ALIBABA_FC_URL = import.meta.env.VITE_ALIBABA_FC_URL || 'https://YOUR-FC-ID.ap-southeast-3.fcapp.run';
+const rawAlibabaFcUrl = import.meta.env.VITE_ALIBABA_FC_URL;
+if (!rawAlibabaFcUrl) {
+  console.warn('[constants] VITE_ALIBABA_FC_URL is undefined. Using placeholder fallback — invoice uploads will fail until a real URL is configured.');
+}
+export const ALIBABA_FC_URL = rawAlibabaFcUrl || 'https://YOUR-FC-ID.ap-southeast-3.fcapp.run';
 
 // WebSocket URL for real-time updates
 // Local fallback server runs on ws://localhost:8765

@@ -5,17 +5,19 @@ export const AuthContext = createContext();
 
 export const useAuth = () => useContext(AuthContext);
 
-const TOKEN_KEY = 'pf_token';
-const USER_KEY = 'pf_user';
+const TOKEN_KEY = 'tng_token';
+const USER_KEY = 'tng_user';
 
 export const AuthProvider = ({ children }) => {
   const [user, setUser] = useState(null);
   const [userProfile, setUserProfile] = useState(null);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState(null);
+  const [authRedirect, setAuthRedirect] = useState(null);
   const expiryTimerRef = useRef(null);
 
   const clearError = () => setError(null);
+  const clearAuthRedirect = () => setAuthRedirect(null);
 
   const isAdmin = userProfile?.role === 'admin';
 
@@ -68,7 +70,7 @@ export const AuthProvider = ({ children }) => {
       const remaining = expiresAt - Date.now();
       if (remaining <= 0) {
         clearSession();
-        window.location.href = '/login?reason=expired';
+        setAuthRedirect('/login?reason=expired');
       }
     }, delay);
   };
@@ -206,6 +208,8 @@ export const AuthProvider = ({ children }) => {
         clearError,
         updateProfile,
         getToken,
+        authRedirect,
+        clearAuthRedirect,
       }}
     >
       {children}

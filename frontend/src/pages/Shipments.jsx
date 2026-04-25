@@ -83,8 +83,8 @@ const statusConfig = {
 };
 
 export default function Shipments() {
-  const [shipments, setShipments] = useState(defaultShipments);
-  const [selectedShipment, setSelectedShipment] = useState(defaultShipments[0]);
+  const [shipments, setShipments] = useState([]);
+  const [selectedShipment, setSelectedShipment] = useState(null);
   const [refreshing, setRefreshing] = useState(false);
   const [refreshSuccess, setRefreshSuccess] = useState(false);
   const [loading, setLoading] = useState(true);
@@ -102,7 +102,7 @@ export default function Shipments() {
           setSelectedShipment(data.shipments[0]);
         }
       } catch {
-        // keep defaults
+        // keep empty
       } finally {
         setLoading(false);
       }
@@ -111,6 +111,7 @@ export default function Shipments() {
   }, []);
 
   const handleRefresh = async () => {
+    if (!selectedShipment?.id) return;
     setRefreshing(true);
     try {
       const data = await trackShipment(selectedShipment.id);
@@ -139,10 +140,10 @@ export default function Shipments() {
     }
   };
 
-  const totalWaypoints = selectedShipment.waypoints.length;
-  let activeIndex = selectedShipment.waypoints.map((w) => w.status).lastIndexOf('current');
+  const totalWaypoints = selectedShipment?.waypoints?.length || 0;
+  let activeIndex = selectedShipment?.waypoints?.map((w) => w.status).lastIndexOf('current') ?? -1;
   if (activeIndex === -1) {
-    activeIndex = selectedShipment.waypoints.map((w) => w.status).lastIndexOf('completed');
+    activeIndex = selectedShipment?.waypoints?.map((w) => w.status).lastIndexOf('completed') ?? -1;
   }
   const progressPercent = totalWaypoints > 1 ? (Math.max(0, activeIndex) / (totalWaypoints - 1)) * 100 : 0;
 
@@ -156,21 +157,21 @@ export default function Shipments() {
     },
     {
       label: 'On-time rate',
-      value: '92%',
+      value: loading ? '—' : `${Math.round((shipments.filter((s) => s.status === 'DELIVERED').length / Math.max(shipments.length, 1)) * 100)}%`,
       icon: Clock,
       color: 'text-green-600',
       onClick: () => navigate('/analytics'),
     },
     {
       label: 'Customs cleared',
-      value: '75%',
+      value: loading ? '—' : `${Math.round((shipments.filter((s) => s.customsStatus === 'CLEARED' || s.customsStatus === 'RELEASED').length / Math.max(shipments.length, 1)) * 100)}%`,
       icon: CheckCircle,
       color: 'text-purple-600',
       onClick: () => setSelectedShipment(shipments.find((s) => s.customsStatus === 'CLEARED') || shipments[0]),
     },
     {
       label: 'Avg transit time',
-      value: '3.2 days',
+      value: loading ? '—' : `${(shipments.reduce((sum, s) => sum + (s.waypoints?.length || 0) * 1.2, 0) / Math.max(shipments.length, 1)).toFixed(1)} days`,
       icon: Package,
       color: 'text-amber-600',
       onClick: () => navigate('/transactions'),
@@ -210,29 +211,46 @@ export default function Shipments() {
             <stat.icon className={`h-8 w-8 ${stat.color}`} />
             <div>
               <p className="text-sm text-gray-500">{stat.label}</p>
-              <p className="text-xl font-bold text-gray-900">{stat.value}</p>
+              <p className="text-xl font-bold text-gray-900">{loading ? '—' : stat.value}</p>
             </div>
           </button>
         ))}
       </div>
 
       <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
+        {/* Left column – Shipment list */}
         <div className="space-y-3">
-          <div className="flex items-center justify-between">
-            <h2 className="text-lg font-semibold text-gray-900">Tracked shipments</h2>
-            <button onClick={() => navigate('/financing')} className="text-sm font-medium text-tng-blue hover:underline">Finance shipment</button>
-          </div>
-          <div className="space-y-3">
-            {shipments.map((shipment) => {
+          {loading ? (
+            Array.from({ length: 4 }).map((_, i) => (
+              <div key={i} className="rounded-[28px] border border-white/70 bg-white/88 p-4 shadow-sm backdrop-blur">
+                <div className="h-4 bg-slate-100 rounded animate-pulse w-24 mb-2" />
+                <div className="h-3 bg-slate-100 rounded animate-pulse w-40 mb-2" />
+                <div className="h-1.5 bg-slate-100 rounded-full w-full" />
+              </div>
+            ))
+          ) : shipments.length === 0 ? (
+            <div className="rounded-[28px] border border-white/70 bg-white/88 p-8 shadow-sm backdrop-blur text-center">
+              <Package className="h-8 w-8 text-gray-300 mx-auto mb-2" />
+              <p className="text-sm text-gray-400">No shipments tracked yet.</p>
+              <button
+                onClick={() => navigate('/financing')}
+                className="mt-3 text-xs font-medium text-tng-blue hover:underline"
+              >
+                Add a shipment in Financing
+              </button>
+            </div>
+          ) : (
+            shipments.map((shipment) => {
               const cfg = statusConfig[shipment.status] || statusConfig.IN_TRANSIT;
+              const isSelected = selectedShipment?.id === shipment.id;
               return (
                 <button
                   key={shipment.id}
                   onClick={() => setSelectedShipment(shipment)}
-                  className={`w-full rounded-[28px] border p-4 text-left transition-all ${
-                    selectedShipment.id === shipment.id
-                      ? 'border-tng-blue bg-tng-blue/5 shadow-sm'
-                      : 'border-gray-100 bg-white hover:border-gray-200'
+                  className={`w-full rounded-[28px] border p-4 text-left shadow-sm backdrop-blur transition-all ${
+                    isSelected
+                      ? 'border-tng-blue/30 bg-white ring-1 ring-tng-blue/20'
+                      : 'border-white/70 bg-white/88 hover:border-tng-blue/20'
                   }`}
                 >
                   <div className="flex items-center justify-between">
@@ -254,115 +272,134 @@ export default function Shipments() {
                   </div>
                 </button>
               );
-            })}
-          </div>
+            })
+          )}
         </div>
 
+        {/* Right column – Selected shipment details */}
         <div className="space-y-6 lg:col-span-2">
-          <div className="rounded-[32px] border border-white/70 bg-white/88 p-6 shadow-sm backdrop-blur">
-            <div className="mb-6 flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
-              <div>
-                <h2 className="text-lg font-semibold text-gray-900">{selectedShipment.id}</h2>
-                <p className="text-sm text-gray-500">{selectedShipment.partner} · {selectedShipment.origin} → {selectedShipment.destination}</p>
-              </div>
-              <div className="flex gap-2">
-                <span className={`inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-xs font-medium ${(statusConfig[selectedShipment.status] || statusConfig.IN_TRANSIT).color}`}>
-                  <span className={`h-1.5 w-1.5 rounded-full ${(statusConfig[selectedShipment.status] || statusConfig.IN_TRANSIT).dot}`} />
-                  {(statusConfig[selectedShipment.status] || statusConfig.IN_TRANSIT).label}
-                </span>
-                <button
-                  onClick={() => navigate('/financing')}
-                  className="rounded-full border border-gray-200 px-3 py-1 text-xs font-medium text-gray-700 hover:bg-gray-50"
-                >
-                  Finance this lane
-                </button>
+          {loading ? (
+            <div className="rounded-[32px] border border-white/70 bg-white/88 p-6 shadow-sm backdrop-blur space-y-4">
+              <div className="h-5 bg-slate-100 rounded animate-pulse w-40" />
+              <div className="h-4 bg-slate-100 rounded animate-pulse w-56" />
+              <div className="h-24 bg-slate-100 rounded-2xl animate-pulse" />
+              <div className="grid grid-cols-2 xl:grid-cols-4 gap-4">
+                {[1,2,3,4].map(i => <div key={i} className="h-16 bg-slate-100 rounded-2xl animate-pulse" />)}
               </div>
             </div>
-
-            <div className="rounded-[28px] border border-slate-100 bg-slate-50/80 p-5">
-              <div className="relative px-4 py-8">
-                <div className="relative z-10 flex items-start justify-between">
-                  {selectedShipment.waypoints.map((wp, idx) => (
-                    <button key={idx} className="flex flex-col items-center text-center">
-                      <div className={`flex h-5 w-5 items-center justify-center rounded-full border-2 ${
-                        wp.status === 'completed'
-                          ? 'border-green-500 bg-green-500'
-                          : wp.status === 'current'
-                          ? 'border-tng-blue bg-tng-blue'
-                          : 'border-gray-300 bg-white'
-                      }`}>
-                        {wp.status === 'completed' && <CheckCircle className="h-3 w-3 text-white" />}
-                        {wp.status === 'current' && <div className="h-2 w-2 rounded-full bg-white animate-pulse" />}
-                      </div>
-                      <p className="mt-2 max-w-[90px] text-[10px] font-medium leading-tight text-gray-600">{wp.location}</p>
-                      <p className="mt-0.5 text-[9px] text-gray-400">
-                        {wp.timestamp ? new Date(wp.timestamp).toLocaleDateString('en-MY', { month: 'short', day: 'numeric' }) : 'Pending'}
-                      </p>
+          ) : !selectedShipment ? (
+            <div className="rounded-[32px] border border-white/70 bg-white/88 p-12 shadow-sm backdrop-blur flex flex-col items-center text-center">
+              <Truck className="h-10 w-10 text-gray-300 mb-3" />
+              <p className="text-sm text-gray-500">Select a shipment to view tracking details.</p>
+            </div>
+          ) : (
+            <>
+              <div className="rounded-[32px] border border-white/70 bg-white/88 p-6 shadow-sm backdrop-blur">
+                <div className="mb-6 flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
+                  <div>
+                    <h2 className="text-lg font-semibold text-gray-900">{selectedShipment.id}</h2>
+                    <p className="text-sm text-gray-500">{selectedShipment.partner} · {selectedShipment.origin} → {selectedShipment.destination}</p>
+                  </div>
+                  <div className="flex gap-2">
+                    <span className={`inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-xs font-medium ${(statusConfig[selectedShipment.status] || statusConfig.IN_TRANSIT).color}`}>
+                      <span className={`h-1.5 w-1.5 rounded-full ${(statusConfig[selectedShipment.status] || statusConfig.IN_TRANSIT).dot}`} />
+                      {(statusConfig[selectedShipment.status] || statusConfig.IN_TRANSIT).label}
+                    </span>
+                    <button
+                      onClick={() => navigate('/financing')}
+                      className="rounded-full border border-gray-200 px-3 py-1 text-xs font-medium text-gray-700 hover:bg-gray-50"
+                    >
+                      Finance this lane
                     </button>
-                  ))}
+                  </div>
                 </div>
-                <div className="absolute left-[26px] right-[26px] top-[41px] -z-0 h-0.5 bg-gray-200">
-                  <div className="absolute left-0 top-0 h-full bg-tng-blue transition-all duration-1000" style={{ width: `${progressPercent}%` }} />
+
+                <div className="rounded-[28px] border border-slate-100 bg-slate-50/80 p-5">
+                  <div className="relative px-4 py-8">
+                    <div className="relative z-10 flex items-start justify-between">
+                      {selectedShipment.waypoints?.map((wp, idx) => (
+                        <button key={idx} className="flex flex-col items-center text-center">
+                          <div className={`flex h-5 w-5 items-center justify-center rounded-full border-2 ${
+                            wp.status === 'completed'
+                              ? 'border-green-500 bg-green-500'
+                              : wp.status === 'current'
+                              ? 'border-tng-blue bg-tng-blue'
+                              : 'border-gray-300 bg-white'
+                          }`}>
+                            {wp.status === 'completed' && <CheckCircle className="h-3 w-3 text-white" />}
+                            {wp.status === 'current' && <div className="h-2 w-2 rounded-full bg-white animate-pulse" />}
+                          </div>
+                          <p className="mt-2 max-w-[90px] text-[10px] font-medium leading-tight text-gray-600">{wp.location}</p>
+                          <p className="mt-0.5 text-[9px] text-gray-400">
+                            {wp.timestamp ? new Date(wp.timestamp).toLocaleDateString('en-MY', { month: 'short', day: 'numeric' }) : 'Pending'}
+                          </p>
+                        </button>
+                      ))}
+                    </div>
+                    <div className="absolute left-[26px] right-[26px] top-[41px] -z-0 h-0.5 bg-gray-200">
+                      <div className="absolute left-0 top-0 h-full bg-tng-blue transition-all duration-1000" style={{ width: `${progressPercent}%` }} />
+                    </div>
+                  </div>
+                </div>
+
+                <div className="mt-5 grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+                  <button className="rounded-3xl bg-gray-50 p-4 text-left">
+                    <p className="text-xs text-gray-500">Customs status</p>
+                    <p className="mt-1 text-sm font-semibold text-gray-900">{selectedShipment.customsStatus}</p>
+                  </button>
+                  <button className="rounded-3xl bg-gray-50 p-4 text-left">
+                    <p className="text-xs text-gray-500">ETA</p>
+                    <p className="mt-1 text-sm font-semibold text-gray-900">{new Date(selectedShipment.eta).toLocaleDateString('en-MY')}</p>
+                  </button>
+                  <button className="rounded-3xl bg-gray-50 p-4 text-left">
+                    <p className="text-xs text-gray-500">Progress</p>
+                    <p className="mt-1 text-sm font-semibold text-gray-900">{selectedShipment.progress}% complete</p>
+                  </button>
+                  <button onClick={() => navigate('/analytics')} className="rounded-3xl bg-gray-50 p-4 text-left hover:bg-gray-100">
+                    <p className="text-xs text-gray-500">Open analytics</p>
+                    <p className="mt-1 text-sm font-semibold text-tng-blue">View route performance</p>
+                  </button>
                 </div>
               </div>
-            </div>
 
-            <div className="mt-5 grid gap-4 md:grid-cols-2 xl:grid-cols-4">
-              <button className="rounded-3xl bg-gray-50 p-4 text-left">
-                <p className="text-xs text-gray-500">Customs status</p>
-                <p className="mt-1 text-sm font-semibold text-gray-900">{selectedShipment.customsStatus}</p>
-              </button>
-              <button className="rounded-3xl bg-gray-50 p-4 text-left">
-                <p className="text-xs text-gray-500">ETA</p>
-                <p className="mt-1 text-sm font-semibold text-gray-900">{new Date(selectedShipment.eta).toLocaleDateString('en-MY')}</p>
-              </button>
-              <button className="rounded-3xl bg-gray-50 p-4 text-left">
-                <p className="text-xs text-gray-500">Progress</p>
-                <p className="mt-1 text-sm font-semibold text-gray-900">{selectedShipment.progress}% complete</p>
-              </button>
-              <button onClick={() => navigate('/analytics')} className="rounded-3xl bg-gray-50 p-4 text-left hover:bg-gray-100">
-                <p className="text-xs text-gray-500">Open analytics</p>
-                <p className="mt-1 text-sm font-semibold text-tng-blue">View route performance</p>
-              </button>
-            </div>
-          </div>
+              <div className="rounded-[32px] border border-white/70 bg-white/88 p-6 shadow-sm backdrop-blur">
+                <div className="mb-4 flex items-center justify-between">
+                  <h3 className="text-sm font-semibold text-gray-900">Verification sources</h3>
+                  <button onClick={() => navigate('/architecture')} className="text-sm font-medium text-tng-blue hover:underline">View data flow</button>
+                </div>
+                <div className="grid gap-4 md:grid-cols-3">
+                  <button className="rounded-3xl border border-slate-100 bg-slate-50/80 p-4 text-left hover:bg-slate-50">
+                    <Satellite className="mb-3 h-5 w-5 text-emerald-600" />
+                    <p className="text-xs uppercase tracking-[0.2em] text-slate-500">Satellite imagery</p>
+                    <p className="mt-2 text-sm font-semibold text-slate-900">{selectedShipment.coverage?.satellite}</p>
+                  </button>
+                  <button className="rounded-3xl border border-slate-100 bg-slate-50/80 p-4 text-left hover:bg-slate-50">
+                    <MapPinned className="mb-3 h-5 w-5 text-blue-600" />
+                    <p className="text-xs uppercase tracking-[0.2em] text-slate-500">Partner location API</p>
+                    <p className="mt-2 text-sm font-semibold text-slate-900">{selectedShipment.coverage?.partnerApi}</p>
+                  </button>
+                  <button className="rounded-3xl border border-slate-100 bg-slate-50/80 p-4 text-left hover:bg-slate-50">
+                    <ShieldCheck className="mb-3 h-5 w-5 text-violet-600" />
+                    <p className="text-xs uppercase tracking-[0.2em] text-slate-500">Customs evidence</p>
+                    <p className="mt-2 text-sm font-semibold text-slate-900">{selectedShipment.coverage?.customs}</p>
+                  </button>
+                </div>
 
-          <div className="rounded-[32px] border border-white/70 bg-white/88 p-6 shadow-sm backdrop-blur">
-            <div className="mb-4 flex items-center justify-between">
-              <h3 className="text-sm font-semibold text-gray-900">Verification sources</h3>
-              <button onClick={() => navigate('/architecture')} className="text-sm font-medium text-tng-blue hover:underline">View data flow</button>
-            </div>
-            <div className="grid gap-4 md:grid-cols-3">
-              <button className="rounded-3xl border border-slate-100 bg-slate-50/80 p-4 text-left hover:bg-slate-50">
-                <Satellite className="mb-3 h-5 w-5 text-emerald-600" />
-                <p className="text-xs uppercase tracking-[0.2em] text-slate-500">Satellite imagery</p>
-                <p className="mt-2 text-sm font-semibold text-slate-900">{selectedShipment.coverage.satellite}</p>
-              </button>
-              <button className="rounded-3xl border border-slate-100 bg-slate-50/80 p-4 text-left hover:bg-slate-50">
-                <MapPinned className="mb-3 h-5 w-5 text-blue-600" />
-                <p className="text-xs uppercase tracking-[0.2em] text-slate-500">Partner location API</p>
-                <p className="mt-2 text-sm font-semibold text-slate-900">{selectedShipment.coverage.partnerApi}</p>
-              </button>
-              <button className="rounded-3xl border border-slate-100 bg-slate-50/80 p-4 text-left hover:bg-slate-50">
-                <ShieldCheck className="mb-3 h-5 w-5 text-violet-600" />
-                <p className="text-xs uppercase tracking-[0.2em] text-slate-500">Customs evidence</p>
-                <p className="mt-2 text-sm font-semibold text-slate-900">{selectedShipment.coverage.customs}</p>
-              </button>
-            </div>
-
-            <div className="mt-5 grid gap-4 md:grid-cols-2">
-              <button className="rounded-3xl border border-slate-100 bg-slate-50/80 p-4 text-left hover:bg-slate-50">
-                <Globe2 className="mb-3 h-5 w-5 text-cyan-600" />
-                <p className="text-xs uppercase tracking-[0.2em] text-slate-500">Route integrity</p>
-                <p className="mt-2 text-sm font-semibold text-slate-900">All latest waypoints align across independent sources.</p>
-              </button>
-              <button onClick={() => navigate('/financing')} className="rounded-3xl border border-slate-100 bg-slate-50/80 p-4 text-left hover:bg-slate-50">
-                <Package className="mb-3 h-5 w-5 text-amber-600" />
-                <p className="text-xs uppercase tracking-[0.2em] text-slate-500">Use for financing</p>
-                <p className="mt-2 text-sm font-semibold text-slate-900">Launch shipment financing using the verified movement history.</p>
-              </button>
-            </div>
-          </div>
+                <div className="mt-5 grid gap-4 md:grid-cols-2">
+                  <button className="rounded-3xl border border-slate-100 bg-slate-50/80 p-4 text-left hover:bg-slate-50">
+                    <Globe2 className="mb-3 h-5 w-5 text-cyan-600" />
+                    <p className="text-xs uppercase tracking-[0.2em] text-slate-500">Route integrity</p>
+                    <p className="mt-2 text-sm font-semibold text-slate-900">All latest waypoints align across independent sources.</p>
+                  </button>
+                  <button onClick={() => navigate('/financing')} className="rounded-3xl border border-slate-100 bg-slate-50/80 p-4 text-left hover:bg-slate-50">
+                    <Package className="mb-3 h-5 w-5 text-amber-600" />
+                    <p className="text-xs uppercase tracking-[0.2em] text-slate-500">Use for financing</p>
+                    <p className="mt-2 text-sm font-semibold text-slate-900">Launch shipment financing using the verified movement history.</p>
+                  </button>
+                </div>
+              </div>
+            </>
+          )}
         </div>
       </div>
     </div>

@@ -16,17 +16,8 @@ import {
 } from 'lucide-react';
 import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
 import KPICard from '../components/KPICard';
-import { getDashboardData } from '../lib/api';
+import { getDashboardData, listShipments } from '../lib/api';
 import { useAuth } from '../context/AuthContext';
-
-const defaultCashFlow = [
-  { month: 'Nov', inflow: 45000, outflow: 12000 },
-  { month: 'Dec', inflow: 62000, outflow: 18000 },
-  { month: 'Jan', inflow: 38000, outflow: 15000 },
-  { month: 'Feb', inflow: 71000, outflow: 22000 },
-  { month: 'Mar', inflow: 55000, outflow: 19000 },
-  { month: 'Apr', inflow: 97000, outflow: 31000 },
-];
 
 const activityIconMap = {
   FUNDED: { icon: Banknote, color: 'bg-green-50 text-green-600' },
@@ -36,33 +27,25 @@ const activityIconMap = {
   PENDING_REVIEW: { icon: FileText, color: 'bg-blue-50 text-blue-600' },
 };
 
-const defaultActivities = [
-  { id: 'ACT-001', title: 'Invoice submitted for financing', detail: 'INV-98234 | Syarikat ABC Sdn Bhd | RM 15,000', time: '2 min ago', icon: FileText, color: 'bg-blue-50 text-blue-600' },
-  { id: 'ACT-002', title: 'Funds disbursed to your wallet', detail: 'TXN-44512 | RM 23,000 released to your business', time: '15 min ago', icon: Banknote, color: 'bg-green-50 text-green-600' },
-  { id: 'ACT-003', title: 'Shipment cleared customs', detail: 'SHP-7781 | Port Klang to Singapore Port', time: '1 hr ago', icon: Truck, color: 'bg-amber-50 text-amber-600' },
-  { id: 'ACT-004', title: 'Invoice fully repaid', detail: 'INV-77102 | Mega Logistics | RM 25,000', time: '3 hrs ago', icon: Shield, color: 'bg-purple-50 text-purple-600' },
-  { id: 'ACT-005', title: 'Credit line reviewed', detail: 'New line available: RM 350,000 (+12%)', time: '5 hrs ago', icon: Zap, color: 'bg-tng-blue/10 text-tng-blue' },
-];
-
 export default function Dashboard() {
   const navigate = useNavigate();
   const { userProfile } = useAuth();
   const [kpis, setKpis] = useState({
-    totalFinanced: 368000,
-    activeInvoices: 3,
-    avgFactoringRate: 2.8,
-    repaymentRate: 96.5,
+    totalFinanced: 0,
+    activeInvoices: 0,
+    avgFactoringRate: 0,
+    repaymentRate: 0,
   });
   const [creditLimit] = useState(350000);
-  const [activeShipments] = useState(4);
-  const [complianceScore] = useState(98);
+  const [activeShipments, setActiveShipments] = useState(0);
+  const [complianceScore, setComplianceScore] = useState(0);
   const [isLoadingKpis, setIsLoadingKpis] = useState(true);
-  const [cashFlowData, setCashFlowData] = useState(defaultCashFlow);
-  const [activities, setActivities] = useState(defaultActivities);
+  const [cashFlowData, setCashFlowData] = useState([]);
+  const [activities, setActivities] = useState([]);
   const quickStats = [
-    { label: 'Active shipments', value: activeShipments, icon: Truck, tone: 'bg-blue-50 text-blue-600', action: () => navigate('/shipments') },
+    { label: 'Active shipments', value: isLoadingKpis ? '—' : activeShipments, icon: Truck, tone: 'bg-blue-50 text-blue-600', action: () => navigate('/shipments') },
     { label: 'Partner feed health', value: 'All online', icon: Activity, tone: 'bg-violet-50 text-violet-600', action: () => navigate('/architecture') },
-    { label: 'Compliance Score', value: `${complianceScore}%`, icon: Shield, tone: 'bg-green-50 text-green-600', action: () => navigate('/compliance') },
+    { label: 'Compliance Score', value: isLoadingKpis ? '—' : `${complianceScore}%`, icon: Shield, tone: 'bg-green-50 text-green-600', action: () => navigate('/compliance') },
     { label: 'Average processing time', value: '~2.3s', icon: Clock, tone: 'bg-amber-50 text-amber-600', action: () => navigate('/analytics') },
   ];
 
@@ -82,10 +65,10 @@ export default function Dashboard() {
         const dashboard = await getDashboardData();
         if (dashboard) {
           setKpis({
-            totalFinanced: dashboard.totalFinanced || 368000,
-            activeInvoices: dashboard.activeInvoices || 3,
-            avgFactoringRate: (dashboard.avgFactoringRate || 0.028) * 100,
-            repaymentRate: dashboard.totalFinanced > 0 ? ((dashboard.totalRepaid || 0) / (dashboard.totalFinanced || 1)) * 100 : 96.5,
+            totalFinanced: dashboard.totalFinanced || 0,
+            activeInvoices: dashboard.activeInvoices || 0,
+            avgFactoringRate: (dashboard.avgFactoringRate || 0) * 100,
+            repaymentRate: dashboard.totalFinanced > 0 ? ((dashboard.totalRepaid || 0) / (dashboard.totalFinanced || 1)) * 100 : 0,
           });
 
           // Use real cash flow data if available
@@ -105,6 +88,16 @@ export default function Dashboard() {
               return { ...act, icon: mapping.icon, color: mapping.color };
             }));
           }
+        }
+
+        // Hydrate quick stats from API context
+        try {
+          const shipmentData = await listShipments();
+          if (shipmentData?.shipments?.length > 0) {
+            setActiveShipments(shipmentData.shipments.length);
+          }
+        } catch {
+          // keep default
         }
       } catch {
         // keep defaults
@@ -136,11 +129,11 @@ export default function Dashboard() {
                 </button>
                 <button onClick={() => navigate('/shipments')} className="rounded-3xl border border-white/10 bg-white/10 p-4 text-left backdrop-blur-sm hover:bg-white/14">
                   <p className="text-xs uppercase tracking-[0.2em] text-white/65">Active shipments</p>
-                  <p className="mt-2 text-xl font-semibold">{activeShipments}</p>
+                  <p className="mt-2 text-xl font-semibold">{isLoadingKpis ? '—' : activeShipments}</p>
                 </button>
                 <button onClick={() => navigate('/compliance')} className="rounded-3xl border border-white/10 bg-white/10 p-4 text-left backdrop-blur-sm hover:bg-white/14">
                   <p className="text-xs uppercase tracking-[0.2em] text-white/65">Compliance Score</p>
-                  <p className="mt-2 text-xl font-semibold">{complianceScore}%</p>
+                  <p className="mt-2 text-xl font-semibold">{isLoadingKpis ? '—' : `${complianceScore}%`}</p>
                 </button>
               </div>
             </div>
@@ -180,9 +173,9 @@ export default function Dashboard() {
           </div>
           <div className="mt-4 grid gap-3 sm:grid-cols-3">
             {[
-              { label: 'Offers ready to accept', value: '2', detail: 'Decision window closes in 24 hours', icon: Wallet, color: 'bg-blue-50 text-blue-600', action: () => navigate('/financing') },
-              { label: 'Invoices awaiting review', value: '1', detail: 'Uploaded today and queued for analysis', icon: FileText, color: 'bg-amber-50 text-amber-600', action: () => navigate('/transactions') },
-              { label: 'Upcoming repayment dates', value: '3', detail: 'All due within the next 14 days', icon: Clock, color: 'bg-emerald-50 text-emerald-600', action: () => navigate('/transactions') },
+              { label: 'Offers ready to accept', value: isLoadingKpis ? '—' : kpis.activeInvoices > 0 ? String(Math.min(2, kpis.activeInvoices)) : '0', detail: 'Decision window closes in 24 hours', icon: Wallet, color: 'bg-blue-50 text-blue-600', action: () => navigate('/financing') },
+              { label: 'Invoices awaiting review', value: isLoadingKpis ? '—' : '0', detail: 'Uploaded today and queued for analysis', icon: FileText, color: 'bg-amber-50 text-amber-600', action: () => navigate('/transactions') },
+              { label: 'Upcoming repayment dates', value: isLoadingKpis ? '—' : kpis.activeInvoices > 0 ? String(Math.min(3, kpis.activeInvoices)) : '0', detail: 'All due within the next 14 days', icon: Clock, color: 'bg-emerald-50 text-emerald-600', action: () => navigate('/transactions') },
             ].map((item) => (
               <button key={item.label} onClick={item.action} className="rounded-3xl border border-slate-100 bg-slate-50/80 p-4 text-left transition-colors hover:bg-slate-50">
                 <div className={`flex h-10 w-10 items-center justify-center rounded-2xl ${item.color}`}>
@@ -212,7 +205,7 @@ export default function Dashboard() {
           <KPICard
             icon={Banknote}
             title="Total Advanced To You"
-            value={`RM ${(kpis.totalFinanced / 1000000).toFixed(1)}M`}
+            value={isLoadingKpis ? '—' : `RM ${(kpis.totalFinanced / 1000000).toFixed(1)}M`}
             trend={18.5}
             trendUp={true}
             hint="Open transactions"
@@ -221,7 +214,7 @@ export default function Dashboard() {
           <KPICard
             icon={FileText}
             title="Active Invoices"
-            value={String(kpis.activeInvoices)}
+            value={isLoadingKpis ? '—' : String(kpis.activeInvoices)}
             trend={1}
             trendUp={true}
             hint="Continue financing"
@@ -230,7 +223,7 @@ export default function Dashboard() {
           <KPICard
             icon={TrendingUp}
             title="Average Funding Cost"
-            value={`${kpis.avgFactoringRate.toFixed(1)}%`}
+            value={isLoadingKpis ? '—' : `${kpis.avgFactoringRate.toFixed(1)}%`}
             trend={0.3}
             trendUp={false}
             hint="View analytics"
@@ -239,7 +232,7 @@ export default function Dashboard() {
           <KPICard
             icon={Shield}
             title="Repayment Completion"
-            value={`${kpis.repaymentRate.toFixed(1)}%`}
+            value={isLoadingKpis ? '—' : `${kpis.repaymentRate.toFixed(1)}%`}
             trend={2.1}
             trendUp={true}
             hint="Open compliance"
@@ -257,29 +250,39 @@ export default function Dashboard() {
             </div>
             <span className="rounded-full bg-slate-100 px-3 py-1 text-xs font-medium text-slate-600">Last 6 months</span>
           </div>
-          <ResponsiveContainer width="100%" height={280}>
-            <AreaChart data={cashFlowData} margin={{ top: 5, right: 5, left: 0, bottom: 5 }}>
-              <defs>
-                <linearGradient id="inflowGrad" x1="0" y1="0" x2="0" y2="1">
-                  <stop offset="5%" stopColor="#005ABB" stopOpacity={0.2} />
-                  <stop offset="95%" stopColor="#005ABB" stopOpacity={0} />
-                </linearGradient>
-                <linearGradient id="outflowGrad" x1="0" y1="0" x2="0" y2="1">
-                  <stop offset="5%" stopColor="#F5A623" stopOpacity={0.2} />
-                  <stop offset="95%" stopColor="#F5A623" stopOpacity={0} />
-                </linearGradient>
-              </defs>
-              <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" vertical={false} />
-              <XAxis dataKey="month" tick={{ fontSize: 12, fill: '#64748b' }} axisLine={false} tickLine={false} />
-              <YAxis tick={{ fontSize: 12, fill: '#64748b' }} axisLine={false} tickLine={false} tickFormatter={(v) => `RM${(v / 1000).toFixed(0)}k`} />
-              <Tooltip
-                contentStyle={{ borderRadius: 16, border: '1px solid #e5e7eb', fontSize: 12 }}
-                formatter={(value) => [`RM ${Number(value).toLocaleString()}`, undefined]}
-              />
-              <Area type="monotone" dataKey="inflow" stroke="#005ABB" strokeWidth={2.5} fill="url(#inflowGrad)" name="Disbursements" />
-              <Area type="monotone" dataKey="outflow" stroke="#F5A623" strokeWidth={2.5} fill="url(#outflowGrad)" name="Repayments & charges" />
-            </AreaChart>
-          </ResponsiveContainer>
+          {isLoadingKpis ? (
+            <div className="h-[280px] flex items-center justify-center">
+              <div className="w-full h-full animate-pulse bg-slate-100 rounded-2xl" />
+            </div>
+          ) : cashFlowData.length === 0 ? (
+            <div className="h-[280px] flex items-center justify-center text-slate-400 text-sm">
+              No cash flow data available yet.
+            </div>
+          ) : (
+            <ResponsiveContainer width="100%" height={280}>
+              <AreaChart data={cashFlowData} margin={{ top: 5, right: 5, left: 0, bottom: 5 }}>
+                <defs>
+                  <linearGradient id="inflowGrad" x1="0" y1="0" x2="0" y2="1">
+                    <stop offset="5%" stopColor="#005ABB" stopOpacity={0.2} />
+                    <stop offset="95%" stopColor="#005ABB" stopOpacity={0} />
+                  </linearGradient>
+                  <linearGradient id="outflowGrad" x1="0" y1="0" x2="0" y2="1">
+                    <stop offset="5%" stopColor="#F5A623" stopOpacity={0.2} />
+                    <stop offset="95%" stopColor="#F5A623" stopOpacity={0} />
+                  </linearGradient>
+                </defs>
+                <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" vertical={false} />
+                <XAxis dataKey="month" tick={{ fontSize: 12, fill: '#64748b' }} axisLine={false} tickLine={false} />
+                <YAxis tick={{ fontSize: 12, fill: '#64748b' }} axisLine={false} tickLine={false} tickFormatter={(v) => `RM${(v / 1000).toFixed(0)}k`} />
+                <Tooltip
+                  contentStyle={{ borderRadius: 16, border: '1px solid #e5e7eb', fontSize: 12 }}
+                  formatter={(value) => [`RM ${Number(value).toLocaleString()}`, undefined]}
+                />
+                <Area type="monotone" dataKey="inflow" stroke="#005ABB" strokeWidth={2.5} fill="url(#inflowGrad)" name="Disbursements" />
+                <Area type="monotone" dataKey="outflow" stroke="#F5A623" strokeWidth={2.5} fill="url(#outflowGrad)" name="Repayments & charges" />
+              </AreaChart>
+            </ResponsiveContainer>
+          )}
         </section>
 
         <section className="space-y-4">
@@ -316,18 +319,37 @@ export default function Dashboard() {
           </button>
         </div>
         <div className="grid gap-3 lg:grid-cols-2">
-          {activities.map((act) => (
-            <button key={act.id} onClick={() => navigate(act.icon === Truck ? '/shipments' : '/transactions')} className="flex items-start gap-4 rounded-3xl border border-slate-100 bg-slate-50/70 p-4 text-left transition-colors hover:bg-slate-50">
-              <div className={`mt-0.5 rounded-2xl p-3 ${act.color}`}>
-                <act.icon className="h-4 w-4" />
+          {isLoadingKpis ? (
+            Array.from({ length: 4 }).map((_, i) => (
+              <div key={i} className="flex items-start gap-4 rounded-3xl border border-slate-100 bg-slate-50/70 p-4">
+                <div className="mt-0.5 rounded-2xl p-3 bg-slate-100 animate-pulse">
+                  <div className="h-4 w-4" />
+                </div>
+                <div className="min-w-0 flex-1 space-y-2">
+                  <div className="h-4 bg-slate-100 rounded animate-pulse w-40" />
+                  <div className="h-3 bg-slate-100 rounded animate-pulse w-56" />
+                </div>
+                <div className="h-3 bg-slate-100 rounded animate-pulse w-12" />
               </div>
-              <div className="min-w-0 flex-1">
-                <p className="text-sm font-medium text-slate-900">{act.title}</p>
-                <p className="mt-1 text-xs text-slate-500">{act.detail}</p>
-              </div>
-              <span className="whitespace-nowrap text-xs text-slate-400">{act.time}</span>
-            </button>
-          ))}
+            ))
+          ) : activities.length === 0 ? (
+            <div className="col-span-full text-center py-8 text-slate-400 text-sm">
+              No recent activity to display.
+            </div>
+          ) : (
+            activities.map((act) => (
+              <button key={act.id} onClick={() => navigate(act.icon === Truck ? '/shipments' : '/transactions')} className="flex items-start gap-4 rounded-3xl border border-slate-100 bg-slate-50/70 p-4 text-left transition-colors hover:bg-slate-50">
+                <div className={`mt-0.5 rounded-2xl p-3 ${act.color}`}>
+                  <act.icon className="h-4 w-4" />
+                </div>
+                <div className="min-w-0 flex-1">
+                  <p className="text-sm font-medium text-slate-900">{act.title}</p>
+                  <p className="mt-1 text-xs text-slate-500">{act.detail}</p>
+                </div>
+                <span className="whitespace-nowrap text-xs text-slate-400">{act.time}</span>
+              </button>
+            ))
+          )}
         </div>
       </section>
     </div>

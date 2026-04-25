@@ -6,11 +6,11 @@ const { DynamoDBClient, PutItemCommand } = require("@aws-sdk/client-dynamodb");
 
 // Configuration
 const COGNITO_USER_POOL_ID = process.env.COGNITO_USER_POOL_ID || "YOUR_USER_POOL_ID";
-const DYNAMODB_TABLE_NAME = process.env.DYNAMODB_TABLE_NAME || "PantasFlowUsers";
+const DYNAMODB_TABLE_NAME = process.env.DYNAMODB_TABLE_NAME || "OUT&INUsers";
 const REGION = process.env.AWS_REGION || "ap-southeast-1";
 
 const adminUser = {
-  email: process.env.ADMIN_EMAIL || "admin@pantasflow.com",
+  email: process.env.ADMIN_EMAIL || "admin@outandin.com",
   password: process.env.ADMIN_PASSWORD || "CHANGE_ME_BEFORE_RUNNING",
   role: "admin"
 };
@@ -19,7 +19,7 @@ const cognitoClient = new CognitoIdentityProviderClient({ region: REGION });
 const dynamoClient = new DynamoDBClient({ region: REGION });
 
 async function seedAdmin() {
-  console.log(`[PantasFlow Setup] Seeding admin account: ${adminUser.email}`);
+  console.log(`[OUT&IN Setup] Seeding admin account: ${adminUser.email}`);
   
   let userId;
 
@@ -80,7 +80,7 @@ async function seedAdmin() {
     console.error("Failed to create admin profile in DynamoDB:", err);
   }
   
-  console.log("[PantasFlow Setup] Admin seeding complete!");
+  console.log("[OUT&IN Setup] Admin seeding complete!");
 }
 
 seedAdmin();

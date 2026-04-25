@@ -13,6 +13,10 @@ Parameters:
     NoEcho: true
     Description: JWT signing secret for auth tokens. Set via --parameter-overrides or samconfig.toml.
     MinLength: 16
+  AllowedOrigin:
+    Type: String
+    Default: "*"
+    Description: CORS allowed origin for API responses. Use '*' for dev; restrict to your frontend domain in production.
 
 Globals:
   Function:
@@ -33,7 +37,7 @@ Resources:
       CorsConfiguration:
         CorsRules:
           - AllowedOrigins:
-              - "*"
+              - !Ref AllowedOrigin
             AllowedMethods:
               - GET
               - PUT
@@ -149,9 +153,72 @@ Resources:
       AttributeDefinitions:
         - AttributeName: id
           AttributeType: S
+        - AttributeName: smeId
+          AttributeType: S
       KeySchema:
         - AttributeName: id
           KeyType: HASH
+      GlobalSecondaryIndexes:
+        - IndexName: SmeIdIndex
+          KeySchema:
+            - AttributeName: smeId
+              KeyType: HASH
+          Projection:
+            ProjectionType: ALL
+      SSESpecification:
+        SSEEnabled: true
+      PointInTimeRecoverySpecification:
+        PointInTimeRecoveryEnabled: true
+      Tags:
+        - Key: Project
+          Value: TnG-FinHack-26
+        - Key: Environment
+          Value: !Ref Environment
+
+  LegacyTransactionsTable:
+    Type: AWS::DynamoDB::Table
+    DeletionPolicy: Retain
+    UpdateReplacePolicy: Retain
+    Properties:
+      TableName: !Sub "tng-finhack-${Environment}-legacy-transactions"
+      BillingMode: PAY_PER_REQUEST
+      AttributeDefinitions:
+        - AttributeName: userId
+          AttributeType: S
+        - AttributeName: timestamp
+          AttributeType: S
+      KeySchema:
+        - AttributeName: userId
+          KeyType: HASH
+        - AttributeName: timestamp
+          KeyType: RANGE
+      SSESpecification:
+        SSEEnabled: true
+      PointInTimeRecoverySpecification:
+        PointInTimeRecoveryEnabled: true
+      Tags:
+        - Key: Project
+          Value: TnG-FinHack-26
+        - Key: Environment
+          Value: !Ref Environment
+
+  LegacyInvoicesTable:
+    Type: AWS::DynamoDB::Table
+    DeletionPolicy: Retain
+    UpdateReplacePolicy: Retain
+    Properties:
+      TableName: !Sub "tng-finhack-${Environment}-legacy-invoices"
+      BillingMode: PAY_PER_REQUEST
+      AttributeDefinitions:
+        - AttributeName: userId
+          AttributeType: S
+        - AttributeName: invoiceId
+          AttributeType: S
+      KeySchema:
+        - AttributeName: userId
+          KeyType: HASH
+        - AttributeName: invoiceId
+          KeyType: RANGE
       SSESpecification:
         SSEEnabled: true
       PointInTimeRecoverySpecification:
@@ -175,7 +242,8 @@ Resources:
           INVOICES_TABLE: !Ref InvoicesTable
           OFFERS_TABLE: !Ref OffersTable
           LOG_LEVEL: INFO
-          ML_MODEL_DIR: /opt/ml/models
+          ML_MODEL_DIR: /opt/python/ml/models
+          ALLOWED_ORIGIN: !Ref AllowedOrigin
       Timeout: 30
       MemorySize: 256
       Events:
@@ -192,8 +260,14 @@ Resources:
       StageName: !Ref Environment
       Cors:
         AllowMethods: "'POST,GET,OPTIONS'"
-        AllowOrigin: "'*'"
+        AllowOrigin: !Sub "'${AllowedOrigin}'"
         AllowHeaders: "'Content-Type,X-Amz-Date,Authorization'"
+      MethodSettings:
+        - ResourcePath: /*
+          HttpMethod: '*'
+          ThrottlingBurstLimit: 50
+          ThrottlingRateLimit: 25
+          MetricsEnabled: true
 
   InvoiceWebhookFunctionRole:
     Type: AWS::IAM::Role
@@ -238,6 +312,7 @@ Resources:
           USERS_TABLE: !Ref UsersTable
           JWT_SECRET: !Ref JwtSecret
           LOG_LEVEL: INFO
+          ALLOWED_ORIGIN: !Ref AllowedOrigin
       Timeout: 30
       MemorySize: 256
       Events:
@@ -257,6 +332,109 @@ Resources:
           Type: Api
           Properties:
             Path: /api/auth/me
+            Method: GET
+            RestApiId: !Ref TnGApiGateway
+        AuthForgotPassword:
+          Type: Api
+          Properties:
+            Path: /api/auth/forgot-password
+            Method: POST
+            RestApiId: !Ref TnGApiGateway
+        AuthResetPassword:
+          Type: Api
+          Properties:
+            Path: /api/auth/reset-password
+            Method: POST
+            RestApiId: !Ref TnGApiGateway
+        AuthChangePassword:
+          Type: Api
+          Properties:
+            Path: /api/auth/change-password
+            Method: POST
+            RestApiId: !Ref TnGApiGateway
+
+  ScoringFunction:
+    Type: AWS::Serverless::Function
+    Description: Legacy credit scoring, invoice lifecycle, shipment tracking, and analytics endpoints.
+    Properties:
+      FunctionName: !Sub "tng-finhack-${Environment}-scoring"
+      Handler: handler.handler
+      CodeUri: lambda/credit-scoring
+      Role: !GetAtt ScoringFunctionRole.Arn
+      Environment:
+        Variables:
+          TXN_TABLE: !Ref LegacyTransactionsTable
+          INVOICE_TABLE: !Ref LegacyInvoicesTable
+          JWT_SECRET: !Ref JwtSecret
+          LOG_LEVEL: INFO
+          ALLOWED_ORIGIN: !Ref AllowedOrigin
+      Timeout: 30
+      MemorySize: 256
+      Events:
+        TriggerPost:
+          Type: Api
+          Properties:
+            Path: /trigger
+            Method: POST
+            RestApiId: !Ref TnGApiGateway
+        TransactionsGet:
+          Type: Api
+          Properties:
+            Path: /transactions/{userId}
+            Method: GET
+            RestApiId: !Ref TnGApiGateway
+        TelemetryGet:
+          Type: Api
+          Properties:
+            Path: /telemetry
+            Method: GET
+            RestApiId: !Ref TnGApiGateway
+        InvoiceUploadPost:
+          Type: Api
+          Properties:
+            Path: /invoice/upload
+            Method: POST
+            RestApiId: !Ref TnGApiGateway
+        InvoiceAnalyzePost:
+          Type: Api
+          Properties:
+            Path: /invoice/analyze
+            Method: POST
+            RestApiId: !Ref TnGApiGateway
+        InvoiceOfferPost:
+          Type: Api
+          Properties:
+            Path: /invoice/offer
+            Method: POST
+            RestApiId: !Ref TnGApiGateway
+        InvoiceAcceptPost:
+          Type: Api
+          Properties:
+            Path: /invoice/accept
+            Method: POST
+            RestApiId: !Ref TnGApiGateway
+        InvoicesGet:
+          Type: Api
+          Properties:
+            Path: /invoices/{userId}
+            Method: GET
+            RestApiId: !Ref TnGApiGateway
+        ShipmentTrackPost:
+          Type: Api
+          Properties:
+            Path: /shipment/track
+            Method: POST
+            RestApiId: !Ref TnGApiGateway
+        ShipmentVerifyPost:
+          Type: Api
+          Properties:
+            Path: /shipment/verify
+            Method: POST
+            RestApiId: !Ref TnGApiGateway
+        AnalyticsGet:
+          Type: Api
+          Properties:
+            Path: /analytics/{userId}
             Method: GET
             RestApiId: !Ref TnGApiGateway
 
@@ -304,23 +482,21 @@ Resources:
           PolicyDocument:
             Version: "2012-10-17"
             Statement:
-              - Sid: ReadAndUpdateInvoices
-                Effect: Allow
-                Action:
-                  - dynamodb:GetItem
-                  - dynamodb:UpdateItem
-                  - dynamodb:Query
-                Resource:
-                  - !GetAtt InvoicesTable.Arn
-                  - !Sub "${InvoicesTable.Arn}/index/SmeIdIndex"
-              - Sid: CreateOffers
+              - Sid: ReadWriteLegacyTransactions
                 Effect: Allow
                 Action:
                   - dynamodb:PutItem
+                  - dynamodb:GetItem
                   - dynamodb:Query
-                Resource:
-                  - !GetAtt OffersTable.Arn
-                  - !Sub "${OffersTable.Arn}/index/SmeIdIndex"
+                Resource: !GetAtt LegacyTransactionsTable.Arn
+              - Sid: ReadWriteLegacyInvoices
+                Effect: Allow
+                Action:
+                  - dynamodb:PutItem
+                  - dynamodb:GetItem
+                  - dynamodb:UpdateItem
+                  - dynamodb:Query
+                Resource: !GetAtt LegacyInvoicesTable.Arn
 
   DisburseFunction:
     Type: AWS::Serverless::Function
@@ -338,6 +514,7 @@ Resources:
           TRANSACTIONS_TABLE: !Ref TransactionsTable
           LOG_LEVEL: INFO
           MOCK_PAYMENT_GATEWAY_DELAY: "1.5"
+          ALLOWED_ORIGIN: !Ref AllowedOrigin
       Timeout: 30
       MemorySize: 256
       Events:
@@ -388,6 +565,29 @@ Resources:
                   - dynamodb:PutItem
                 Resource: !GetAtt TransactionsTable.Arn
 
+  ReconciliationFunction:
+    Type: AWS::Serverless::Function
+    Description: Generates Excel reconciliation reports from transaction ledger data.
+    Properties:
+      FunctionName: !Sub "tng-finhack-${Environment}-reconciliation"
+      Handler: handler.handler
+      CodeUri: lambda/excel-reconciliation
+      Role: !GetAtt ReconciliationFunctionRole.Arn
+      Environment:
+        Variables:
+          TXN_TABLE: !Ref LegacyTransactionsTable
+          LOG_LEVEL: INFO
+          ALLOWED_ORIGIN: !Ref AllowedOrigin
+      Timeout: 29
+      MemorySize: 512
+      Events:
+        ReconciliationDownload:
+          Type: Api
+          Properties:
+            Path: /reconciliation/download
+            Method: GET
+            RestApiId: !Ref TnGApiGateway
+
   ReconciliationFunctionRole:
     Type: AWS::IAM::Role
     Properties:
@@ -413,12 +613,7 @@ Resources:
                   - dynamodb:Query
                   - dynamodb:Scan
                 Resource:
-                  - !GetAtt UsersTable.Arn
-                  - !GetAtt InvoicesTable.Arn
-                  - !Sub "${InvoicesTable.Arn}/index/SmeIdIndex"
-                  - !GetAtt OffersTable.Arn
-                  - !Sub "${OffersTable.Arn}/index/SmeIdIndex"
-                  - !GetAtt TransactionsTable.Arn
+                  - !GetAtt LegacyTransactionsTable.Arn
 
 Outputs:
   InvoiceUploadsBucketName:

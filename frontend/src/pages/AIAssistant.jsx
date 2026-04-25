@@ -3,40 +3,15 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { Send, User, Bot, Sparkles } from 'lucide-react';
 import { queryAIAssistant } from '../lib/api';
 
-const smartResponses = {
-  'what\'s my factoring rate': 'Based on your credit score of 780, your current rate is 3%. This includes a 2% base rate and 1% risk premium.',
-  'what is my factoring rate': 'Based on your credit score of 780, your current rate is 3%. This includes a 2% base rate and 1% risk premium.',
-  'how does invoice financing work': 'It\'s simple: 1) Upload your invoice, 2) Our AI analyzes fraud risk and credit score in seconds, 3) You get an instant offer (up to 95% advance), 4) Accept and funds hit your TNG Wallet instantly. The factoring fee (1-5%) is deducted from the advance. Your buyer repays TnG on the due date.',
-  'what fees do i pay': 'You pay a one-time factoring fee per invoice, typically 1-5% of the invoice amount. This fee is deducted upfront from your advance. For example, on a RM 10,000 invoice with a 3% fee, you receive RM 9,200 instantly (after the 95% advance and fee deduction). There are no hidden charges or monthly fees.',
-  'am i eligible': 'Eligibility criteria for Malaysian SMEs:\n• Registered business in Malaysia (SSM)\n• Minimum 12 months operating history\n• Monthly revenue of at least RM 10,000\n• Valid trade invoices or shipment documents\n• TNG e-wallet account for disbursement\n\nYour current credit score of 780 qualifies you for our best rates!',
-  'how long does disbursement take': 'Once you accept an offer, funds are disbursed to your TNG Wallet within seconds. The entire process from upload to cash in hand takes under 3 minutes.',
-  'what is shipment financing': 'Shipment financing lets you get up to 85% of your shipment value before delivery. We verify your shipment via satellite imagery, shipping partner location APIs, and customs data. Once verified, you receive the advance just like invoice financing.',
-};
-
 const welcomeMessage = {
   id: 'welcome',
   role: 'assistant',
   text: "Hi! I'm your TnG financing assistant. I can help you understand fees, check eligibility, or explain your credit score. What would you like to know?",
 };
 
-function getLocalResponse(input) {
-  const lower = input.toLowerCase().trim();
-  for (const [key, value] of Object.entries(smartResponses)) {
-    if (lower.includes(key)) return value;
-  }
-  return null;
-}
-
 async function getResponse(input, history) {
-  // Try backend AI first
-  try {
-    const result = await queryAIAssistant(input, history);
-    if (result?.reply) return result.reply;
-  } catch {
-    // fall through to local
-  }
-  // Fallback to local keyword matching
-  return getLocalResponse(input) || "I'll connect you with our team for that. In the meantime, try uploading an invoice to see your instant offer!";
+  const result = await queryAIAssistant(input, history);
+  return result?.reply ?? "I'm sorry, I couldn't process that. Please try again or contact support.";
 }
 
 export default function AIAssistant() {

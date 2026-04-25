@@ -25,10 +25,14 @@ _feature_importances = None
 
 def _model_dir() -> str:
     """Return the directory containing model artifacts."""
-    # Lambda layer mounts to /opt/ml/models
-    lambda_layer = "/opt/ml/models"
+    # Lambda layer mounts python packages under /opt/python/
+    lambda_layer = "/opt/python/ml/models"
     if os.path.isdir(lambda_layer) and os.path.isfile(os.path.join(lambda_layer, "credit_classifier.pkl")):
         return lambda_layer
+    # Legacy fallback (some deployments use /opt/ml/models)
+    legacy = "/opt/ml/models"
+    if os.path.isdir(legacy) and os.path.isfile(os.path.join(legacy, "credit_classifier.pkl")):
+        return legacy
     # Fallback to local relative path
     local = os.path.join(os.path.dirname(os.path.abspath(__file__)), "models")
     return local

@@ -19,11 +19,12 @@ resources:
       environmentVariables:
         AWS_WEBHOOK_URL: ${env('AWS_WEBHOOK_URL')}
         DASHSCOPE_API_KEY: ${env('DASHSCOPE_API_KEY')}
-        DASHSCOPE_BASE_URL: https://dashscope-intl.aliyuncs.com/compatible-mode/v1
-        DASHSCOPE_OCR_MODEL: qwen-vl-ocr
+        DASHSCOPE_BASE_URL: ${env('DASHSCOPE_BASE_URL', 'https://dashscope-intl.aliyuncs.com/compatible-mode/v1')}
+        DASHSCOPE_VISION_MODEL: ${env('DASHSCOPE_VISION_MODEL', 'qwen-vl-max')}
         DASHSCOPE_DOC_API_KEY: ${env('DASHSCOPE_DOC_API_KEY')}
-        DASHSCOPE_DOC_BASE_URL: https://dashscope-intl.aliyuncs.com/compatible-mode/v1
-        DASHSCOPE_DOC_MODEL: qwen-plus
+        DASHSCOPE_DOC_BASE_URL: ${env('DASHSCOPE_DOC_BASE_URL', 'https://dashscope-intl.aliyuncs.com/compatible-mode/v1')}
+        DASHSCOPE_DOC_MODEL: ${env('DASHSCOPE_DOC_MODEL', 'qwen-plus')}
+        DASHSCOPE_API_STRATEGY: ${env('DASHSCOPE_API_STRATEGY', 'openai-compatible')}
       triggers:
         - triggerName: httpTrigger
           triggerType: http

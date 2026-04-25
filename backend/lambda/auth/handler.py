@@ -1,5 +1,5 @@
 """
-AWS Lambda auth service for PantasFlow.
+AWS Lambda auth service for OUT&IN.
 
 Endpoints:
   POST /api/auth/register  — Create account, return JWT
@@ -16,6 +16,8 @@ Security:
 
 import json
 import os
+import secrets
+import string
 import time
 import uuid
 from datetime import datetime, timezone
@@ -55,7 +57,7 @@ JWT_EXPIRY_SECONDS = 86400  # 24 hours
 # ---------------------------------------------------------------------------
 CORS_HEADERS = {
     "Content-Type": "application/json",
-    "Access-Control-Allow-Origin": "*",
+    "Access-Control-Allow-Origin": os.environ.get("ALLOWED_ORIGIN", "*"),
     "Access-Control-Allow-Headers": "Content-Type,Authorization,X-Amz-Date",
     "Access-Control-Allow-Methods": "POST,GET,OPTIONS",
 }
@@ -90,6 +92,47 @@ class RegisterRequest(BaseModel):
 class LoginRequest(BaseModel):
     email: EmailStr
     password: str = Field(..., min_length=1)
+
+
+class ForgotPasswordRequest(BaseModel):
+    email: EmailStr
+
+
+class ResetPasswordRequest(BaseModel):
+    email: EmailStr
+    reset_token: str = Field(..., min_length=1)
+    new_password: str = Field(..., min_length=8)
+
+    @field_validator("new_password")
+    @classmethod
+    def password_strength(cls, v: str) -> str:
+        if not any(c.isupper() for c in v):
+            raise ValueError("Password must contain at least one uppercase letter")
+        if not any(c.islower() for c in v):
+            raise ValueError("Password must contain at least one lowercase letter")
+        if not any(c.isdigit() for c in v):
+            raise ValueError("Password must contain at least one digit")
+        if not any(c in "!@#$%^&*()_+-=[]{}|;:',.<>?/`~" for c in v):
+            raise ValueError("Password must contain at least one special character")
+        return v
+
+
+class ChangePasswordRequest(BaseModel):
+    current_password: str = Field(..., min_length=1)
+    new_password: str = Field(..., min_length=8)
+
+    @field_validator("new_password")
+    @classmethod
+    def password_strength(cls, v: str) -> str:
+        if not any(c.isupper() for c in v):
+            raise ValueError("Password must contain at least one uppercase letter")
+        if not any(c.islower() for c in v):
+            raise ValueError("Password must contain at least one lowercase letter")
+        if not any(c.isdigit() for c in v):
+            raise ValueError("Password must contain at least one digit")
+        if not any(c in "!@#$%^&*()_+-=[]{}|;:',.<>?/`~" for c in v):
+            raise ValueError("Password must contain at least one special character")
+        return v
 
 
 # ===================================================================
@@ -139,6 +182,19 @@ def _dynamo_to_dict(item: dict) -> dict:
         else:
             converted[key] = value
     return converted
+
+
+def _generate_secure_password(length: int = 14) -> str:
+    """Generate a cryptographically secure random password."""
+    alphabet = string.ascii_letters + string.digits + "!@#$%^&*"
+    while True:
+        pw = ''.join(secrets.choice(alphabet) for _ in range(length))
+        # Ensure it meets the strength requirements
+        if (any(c.isupper() for c in pw)
+                and any(c.islower() for c in pw)
+                and any(c.isdigit() for c in pw)
+                and any(c in "!@#$%^&*" for c in pw)):
+            return pw
 
 
 def _create_jwt(user_id: str, role: str, email: str = "") -> str:
@@ -283,6 +339,179 @@ def handle_login(body: dict) -> dict:
     })
 
 
+def handle_forgot_password(body: dict) -> dict:
+    """
+    Generate a secure temporary password, store its hash as a reset token,
+    and return the temporary password so the frontend can display it.
+
+    In production this would email the user via SES/SNS. For the hackathon,
+    we return the temp password directly for demo purposes.
+    """
+    try:
+        req = ForgotPasswordRequest(**body)
+    except ValidationError as exc:
+        return _response(400, {"error": "Validation failed", "details": str(exc)})
+
+    # Check if user exists
+    try:
+        result = users_table.get_item(Key={"id": req.email})
+        item = result.get("Item")
+    except Exception as exc:
+        logger.error("DynamoDB read failed during forgot-password", extra={"error": str(exc)})
+        return _response(500, {"error": "Internal server error"})
+
+    if not item:
+        # Don't reveal whether email exists — return success anyway
+        logger.info("Forgot-password for non-existent email", extra={"email": req.email})
+        return _response(200, {"message": "If an account with that email exists, a reset code has been generated."})
+
+    # Generate a temporary password and a reset token
+    temp_password = _generate_secure_password()
+    reset_token = secrets.token_urlsafe(32)
+    reset_token_hash = bcrypt.hashpw(reset_token.encode("utf-8"), bcrypt.gensalt(rounds=10)).decode("utf-8")
+    now_utc = datetime.now(timezone.utc).isoformat()
+
+    # Store the reset token hash and expiry (15 min)
+    try:
+        users_table.update_item(
+            Key={"id": req.email},
+            UpdateExpression="SET resetTokenHash = :rth, resetTokenExpiry = :rte, tempPassword = :tp, updatedAt = :ua",
+            ExpressionAttributeValues={
+                ":rth": reset_token_hash,
+                ":rte": str(int(time.time()) + 900),  # 15 min expiry
+                ":tp": temp_password,
+                ":ua": now_utc,
+            },
+        )
+    except Exception as exc:
+        logger.error("Failed to store reset token", extra={"error": str(exc)})
+        return _response(500, {"error": "Failed to initiate password reset"})
+
+    logger.info("Password reset initiated", extra={"email": req.email})
+
+    # For hackathon demo: return the temp password and reset token directly
+    # In production, you'd email the temp password via SES
+    return _response(200, {
+        "message": "Reset code generated successfully.",
+        "resetToken": reset_token,
+        "tempPassword": temp_password,
+    })
+
+
+def handle_reset_password(body: dict) -> dict:
+    """
+    Verify the reset token and set a new password.
+    The user must provide the reset token they received + the new password.
+    """
+    try:
+        req = ResetPasswordRequest(**body)
+    except ValidationError as exc:
+        errors = [
+            {"field": ".".join(str(loc) for loc in err["loc"]), "message": err["msg"]}
+            for err in exc.errors()
+        ]
+        return _response(400, {"error": "Validation failed", "details": errors})
+
+    # Fetch user
+    try:
+        result = users_table.get_item(Key={"id": req.email})
+        item = result.get("Item")
+    except Exception as exc:
+        logger.error("DynamoDB read failed during reset-password", extra={"error": str(exc)})
+        return _response(500, {"error": "Internal server error"})
+
+    if not item:
+        return _response(401, {"error": "Invalid or expired reset token"})
+
+    # Verify reset token
+    stored_hash = item.get("resetTokenHash", "")
+    expiry = item.get("resetTokenExpiry", "0")
+
+    if not stored_hash:
+        return _response(401, {"error": "No reset request found. Please request a new one."})
+
+    if int(expiry) < int(time.time()):
+        return _response(401, {"error": "Reset token has expired. Please request a new one."})
+
+    if not bcrypt.checkpw(req.reset_token.encode("utf-8"), stored_hash.encode("utf-8")):
+        return _response(401, {"error": "Invalid reset token"})
+
+    # Update password
+    new_hash = bcrypt.hashpw(req.new_password.encode("utf-8"), bcrypt.gensalt(rounds=12)).decode("utf-8")
+    now_utc = datetime.now(timezone.utc).isoformat()
+
+    try:
+        users_table.update_item(
+            Key={"id": req.email},
+            UpdateExpression="SET passwordHash = :ph, resetTokenHash = :none, resetTokenExpiry = :zero, tempPassword = :none2, updatedAt = :ua",
+            ExpressionAttributeValues={
+                ":ph": new_hash,
+                ":none": "",
+                ":zero": "0",
+                ":none2": "",
+                ":ua": now_utc,
+            },
+        )
+    except Exception as exc:
+        logger.error("Failed to update password", extra={"error": str(exc)})
+        return _response(500, {"error": "Failed to reset password"})
+
+    logger.info("Password reset successfully", extra={"email": req.email})
+
+    return _response(200, {"message": "Password has been reset successfully. You can now log in with your new password."})
+
+
+def handle_change_password(email: str, body: dict) -> dict:
+    """
+    Change password for an authenticated user. Requires current password + new password.
+    """
+    try:
+        req = ChangePasswordRequest(**body)
+    except ValidationError as exc:
+        errors = [
+            {"field": ".".join(str(loc) for loc in err["loc"]), "message": err["msg"]}
+            for err in exc.errors()
+        ]
+        return _response(400, {"error": "Validation failed", "details": errors})
+
+    # Fetch user
+    try:
+        result = users_table.get_item(Key={"id": email})
+        item = result.get("Item")
+    except Exception as exc:
+        logger.error("DynamoDB read failed during change-password", extra={"error": str(exc)})
+        return _response(500, {"error": "Internal server error"})
+
+    if not item:
+        return _response(404, {"error": "User not found"})
+
+    # Verify current password
+    stored_hash = item.get("passwordHash", "")
+    if not stored_hash or not bcrypt.checkpw(req.current_password.encode("utf-8"), stored_hash.encode("utf-8")):
+        return _response(401, {"error": "Current password is incorrect"})
+
+    # Update password
+    new_hash = bcrypt.hashpw(req.new_password.encode("utf-8"), bcrypt.gensalt(rounds=12)).decode("utf-8")
+    now_utc = datetime.now(timezone.utc).isoformat()
+
+    try:
+        users_table.update_item(
+            Key={"id": email},
+            UpdateExpression="SET passwordHash = :ph, updatedAt = :ua",
+            ExpressionAttributeValues={
+                ":ph": new_hash,
+                ":ua": now_utc,
+            },
+        )
+    except Exception as exc:
+        logger.error("Failed to update password", extra={"error": str(exc)})
+        return _response(500, {"error": "Failed to change password"})
+
+    logger.info("Password changed successfully", extra={"email": email})
+
+    return _response(200, {"message": "Password changed successfully"})
+
+
 def handle_me(auth_header: str) -> dict:
     if not auth_header or not auth_header.startswith("Bearer "):
         return _response(401, {"error": "Missing or invalid authorization header"})
@@ -312,17 +541,14 @@ def handle_me(auth_header: str) -> dict:
             if item:
                 profile = _user_profile_from_item(dict(item))
                 return _response(200, {"profile": profile})
+            else:
+                logger.warning("User not found for /me", extra={"email": email})
+                return _response(404, {"error": "User not found"})
         except Exception as exc:
             logger.error("Failed to fetch profile for /me", extra={"error": str(exc)})
+            return _response(500, {"error": "Failed to retrieve profile"})
 
-    # Fallback: return JWT claims
-    return _response(200, {
-        "profile": {
-            "userId": user_id,
-            "role": role,
-            "email": email,
-        },
-    })
+    return _response(401, {"error": "Invalid token — missing email claim"})
 
 
 # ===================================================================
@@ -351,6 +577,25 @@ def handler(event, context):
         return handle_register(body)
     elif path == "/api/auth/login" and method == "POST":
         return handle_login(body)
+    elif path == "/api/auth/forgot-password" and method == "POST":
+        return handle_forgot_password(body)
+    elif path == "/api/auth/reset-password" and method == "POST":
+        return handle_reset_password(body)
+    elif path == "/api/auth/change-password" and method == "POST":
+        auth_header = (event.get("headers") or {}).get("Authorization", "") or (event.get("headers") or {}).get("authorization", "")
+        # Verify JWT to get email
+        if not auth_header or not auth_header.startswith("Bearer "):
+            return _response(401, {"error": "Authentication required"})
+        try:
+            payload = jwt.decode(auth_header[7:], JWT_SECRET, algorithms=[JWT_ALGORITHM])
+            email = payload.get("email", "")
+            if not email:
+                return _response(401, {"error": "Invalid token"})
+        except jwt.ExpiredSignatureError:
+            return _response(401, {"error": "Token expired", "code": "TOKEN_EXPIRED"})
+        except jwt.InvalidTokenError:
+            return _response(401, {"error": "Invalid token"})
+        return handle_change_password(email, body)
     elif path == "/api/auth/me" and method == "GET":
         auth_header = (event.get("headers") or {}).get("Authorization", "") or (event.get("headers") or {}).get("authorization", "")
         return handle_me(auth_header)

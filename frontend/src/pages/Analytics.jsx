@@ -6,51 +6,31 @@ import {
 import { Activity, Brain, TrendingUp, Wallet, BarChart3 } from 'lucide-react';
 import { getAnalytics, listInvoices } from '../lib/api';
 
-const defaultCashFlow = [
-  { month: 'Nov', inflows: 45000, outflows: 12000 },
-  { month: 'Dec', inflows: 62000, outflows: 18000 },
-  { month: 'Jan', inflows: 38000, outflows: 15000 },
-  { month: 'Feb', inflows: 71000, outflows: 22000 },
-  { month: 'Mar', inflows: 55000, outflows: 19000 },
-  { month: 'Apr', inflows: 97000, outflows: 31000 },
-];
-
-const defaultPortfolioRisk = [
-  { name: 'Low Risk', value: 45, color: '#22c55e' },
-  { name: 'Medium Risk', value: 35, color: '#eab308' },
-  { name: 'High Risk', value: 20, color: '#ef4444' },
-];
-
-const defaultFeatureImportance = [
-  { feature: 'Payment Consistency', importance: 0.32 },
-  { feature: 'Business Tenure', importance: 0.24 },
-  { feature: 'Invoice Amount', importance: 0.18 },
-  { feature: 'Monthly Revenue', importance: 0.14 },
-  { feature: 'Txn Volume', importance: 0.08 },
-  { feature: 'Industry Sector', importance: 0.04 },
-];
-
-const defaultPaymentPatterns = [
-  { month: 'Nov', onTime: 8, late: 1 },
-  { month: 'Dec', onTime: 10, late: 2 },
-  { month: 'Jan', onTime: 7, late: 1 },
-  { month: 'Feb', onTime: 12, late: 0 },
-  { month: 'Mar', onTime: 9, late: 2 },
-  { month: 'Apr', onTime: 11, late: 1 },
-];
-
 export default function Analytics() {
-  const [utilization, setUtilization] = useState(42);
-  const [totalFinanced, setTotalFinanced] = useState(368000);
+  const [loading, setLoading] = useState(true);
+  const [utilization, setUtilization] = useState(0);
+  const [totalFinanced, setTotalFinanced] = useState(0);
   const [creditLimit] = useState(875000);
-  const [onTimeRate, setOnTimeRate] = useState(94.2);
-  const [cashFlowData, setCashFlowData] = useState(defaultCashFlow);
-  const [portfolioRisk, setPortfolioRisk] = useState(defaultPortfolioRisk);
-  const [featureImportance] = useState(defaultFeatureImportance);
-  const [paymentPatterns, setPaymentPatterns] = useState(defaultPaymentPatterns);
+  const [onTimeRate, setOnTimeRate] = useState(0);
+  const [cashFlowData, setCashFlowData] = useState([]);
+  const [portfolioRisk, setPortfolioRisk] = useState([
+    { name: 'Low Risk', value: 100, color: '#22c55e' },
+    { name: 'Medium Risk', value: 0, color: '#eab308' },
+    { name: 'High Risk', value: 0, color: '#ef4444' },
+  ]);
+  const [featureImportance] = useState([
+    { feature: 'Payment Consistency', importance: 0.32 },
+    { feature: 'Business Tenure', importance: 0.24 },
+    { feature: 'Invoice Amount', importance: 0.18 },
+    { feature: 'Monthly Revenue', importance: 0.14 },
+    { feature: 'Txn Volume', importance: 0.08 },
+    { feature: 'Industry Sector', importance: 0.04 },
+  ]);
+  const [paymentPatterns, setPaymentPatterns] = useState([]);
 
   useEffect(() => {
     async function load() {
+      setLoading(true);
       try {
         const [analytics, invoicesData] = await Promise.allSettled([
           getAnalytics(),
@@ -61,17 +41,17 @@ export default function Analytics() {
         const invData = invoicesData.status === 'fulfilled' ? invoicesData.value : null;
 
         if (data) {
-          setUtilization(Math.round((data.utilizationRate || 0.42) * 100));
-          setTotalFinanced(data.totalFinanced || 368000);
+          setUtilization(Math.round((data?.utilizationRate ?? 0) * 100));
+          setTotalFinanced(data?.totalFinanced ?? 0);
 
           // Build cash flow from API summary data
-          if (data.cashFlowSummary?.length > 0) {
+          if (data?.cashFlowSummary?.length > 0) {
             setCashFlowData(data.cashFlowSummary.map((item) => {
-              const monthLabel = new Date(item.month + '-01').toLocaleString('en-US', { month: 'short' });
+              const monthLabel = new Date((item?.month ?? '2026-01') + '-01').toLocaleString('en-US', { month: 'short' });
               return {
                 month: monthLabel,
-                inflows: item.disbursements || 0,
-                outflows: Math.round((item.disbursements || 0) * 0.32),
+                inflows: item?.disbursements ?? 0,
+                outflows: Math.round((item?.disbursements ?? 0) * 0.32),
               };
             }));
           }
@@ -80,9 +60,9 @@ export default function Analytics() {
         // Derive portfolio risk and payment patterns from real invoices
         if (invData?.invoices?.length > 0) {
           const invoices = invData.invoices;
-          const funded = invoices.filter((i) => i.status === 'FUNDED');
-          const repaid = invoices.filter((i) => i.status === 'REPAID');
-          const pending = invoices.filter((i) => i.status === 'PENDING_REVIEW' || i.status === 'ANALYZED' || i.status === 'OFFER_MADE');
+          const funded = invoices.filter((i) => i?.status === 'FUNDED');
+          const repaid = invoices.filter((i) => i?.status === 'REPAID');
+          const pending = invoices.filter((i) => i?.status === 'PENDING_REVIEW' || i?.status === 'ANALYZED' || i?.status === 'OFFER_MADE');
 
           const total = invoices.length || 1;
           setPortfolioRisk([
@@ -93,24 +73,26 @@ export default function Analytics() {
 
           // Derive on-time rate
           if (repaid.length + funded.length > 0) {
-            setOnTimeRate(Math.round((repaid.length / (repaid.length + funded.length)) * 100 * 10) / 10 || 94.2);
+            setOnTimeRate(Math.round((repaid.length / (repaid.length + funded.length)) * 100 * 10) / 10);
           }
 
           // Build payment patterns from invoice dates
           const patternMap = {};
           invoices.forEach((inv) => {
-            const d = inv.invoiceDate || inv.dueDate;
+            const d = inv?.invoiceDate || inv?.dueDate;
             if (!d) return;
             const month = new Date(d).toLocaleString('en-US', { month: 'short' });
             if (!patternMap[month]) patternMap[month] = { month, onTime: 0, late: 0 };
-            if (inv.status === 'REPAID') patternMap[month].onTime += 1;
-            else if (inv.status === 'FUNDED') patternMap[month].late += 1;
+            if (inv?.status === 'REPAID') patternMap[month].onTime += 1;
+            else if (inv?.status === 'FUNDED') patternMap[month].late += 1;
           });
           const patterns = Object.values(patternMap);
           if (patterns.length > 0) setPaymentPatterns(patterns);
         }
       } catch {
-        // keep defaults
+        // keep empty
+      } finally {
+        setLoading(false);
       }
     }
     load();
@@ -126,9 +108,9 @@ export default function Analytics() {
       {/* KPIs */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
         {[
-          { label: 'Total Financed', value: `RM ${(totalFinanced / 1000).toFixed(0)}k`, icon: Wallet, color: 'text-tng-blue' },
-          { label: 'Credit Utilization', value: `${utilization}%`, icon: Activity, color: 'text-purple-600' },
-          { label: 'On-Time Repayment', value: `${onTimeRate}%`, icon: TrendingUp, color: 'text-green-600' },
+          { label: 'Total Financed', value: loading ? '—' : `RM ${(totalFinanced / 1000).toFixed(0)}k`, icon: Wallet, color: 'text-tng-blue' },
+          { label: 'Credit Utilization', value: loading ? '—' : `${utilization}%`, icon: Activity, color: 'text-purple-600' },
+          { label: 'On-Time Repayment', value: loading ? '—' : `${onTimeRate}%`, icon: TrendingUp, color: 'text-green-600' },
         ].map((stat) => (
           <div key={stat.label} className="bg-white rounded-xl p-5 shadow-sm border border-gray-100 flex items-center gap-4">
             <stat.icon className={`w-8 h-8 ${stat.color}`} />
@@ -147,29 +129,39 @@ export default function Analytics() {
             <BarChart3 className="w-5 h-5 text-tng-blue" />
             <h2 className="text-lg font-semibold text-gray-900">Cash Flow Dashboard</h2>
           </div>
-          <ResponsiveContainer width="100%" height={280}>
-            <AreaChart data={cashFlowData} margin={{ top: 5, right: 5, left: 0, bottom: 5 }}>
-              <defs>
-                <linearGradient id="inflowGrad2" x1="0" y1="0" x2="0" y2="1">
-                  <stop offset="5%" stopColor="#005ABB" stopOpacity={0.2} />
-                  <stop offset="95%" stopColor="#005ABB" stopOpacity={0} />
-                </linearGradient>
-                <linearGradient id="outflowGrad2" x1="0" y1="0" x2="0" y2="1">
-                  <stop offset="5%" stopColor="#F5A623" stopOpacity={0.2} />
-                  <stop offset="95%" stopColor="#F5A623" stopOpacity={0} />
-                </linearGradient>
-              </defs>
-              <CartesianGrid strokeDasharray="3 3" stroke="#f3f4f6" />
-              <XAxis dataKey="month" tick={{ fontSize: 12 }} />
-              <YAxis tick={{ fontSize: 12 }} tickFormatter={(v) => `RM${(v / 1000).toFixed(0)}k`} />
-              <Tooltip
-                contentStyle={{ borderRadius: 8, border: '1px solid #e5e7eb', fontSize: 12 }}
-                formatter={(value) => [`RM ${Number(value).toLocaleString()}`, undefined]}
-              />
-              <Area type="monotone" dataKey="inflows" stroke="#005ABB" strokeWidth={2} fill="url(#inflowGrad2)" name="Inflows (Disbursements)" />
-              <Area type="monotone" dataKey="outflows" stroke="#F5A623" strokeWidth={2} fill="url(#outflowGrad2)" name="Outflows (Fees/Repayments)" />
-            </AreaChart>
-          </ResponsiveContainer>
+          {loading ? (
+            <div className="h-[280px] flex items-center justify-center">
+              <div className="w-full h-full animate-pulse bg-gray-100 rounded-2xl" />
+            </div>
+          ) : cashFlowData.length === 0 ? (
+            <div className="h-[280px] flex items-center justify-center text-gray-400 text-sm">
+              No cash flow data available yet.
+            </div>
+          ) : (
+            <ResponsiveContainer width="100%" height={280}>
+              <AreaChart data={cashFlowData} margin={{ top: 5, right: 5, left: 0, bottom: 5 }}>
+                <defs>
+                  <linearGradient id="inflowGrad2" x1="0" y1="0" x2="0" y2="1">
+                    <stop offset="5%" stopColor="#005ABB" stopOpacity={0.2} />
+                    <stop offset="95%" stopColor="#005ABB" stopOpacity={0} />
+                  </linearGradient>
+                  <linearGradient id="outflowGrad2" x1="0" y1="0" x2="0" y2="1">
+                    <stop offset="5%" stopColor="#F5A623" stopOpacity={0.2} />
+                    <stop offset="95%" stopColor="#F5A623" stopOpacity={0} />
+                  </linearGradient>
+                </defs>
+                <CartesianGrid strokeDasharray="3 3" stroke="#f3f4f6" />
+                <XAxis dataKey="month" tick={{ fontSize: 12 }} />
+                <YAxis tick={{ fontSize: 12 }} tickFormatter={(v) => `RM${(v / 1000).toFixed(0)}k`} />
+                <Tooltip
+                  contentStyle={{ borderRadius: 8, border: '1px solid #e5e7eb', fontSize: 12 }}
+                  formatter={(value) => [`RM ${Number(value).toLocaleString()}`, undefined]}
+                />
+                <Area type="monotone" dataKey="inflows" stroke="#005ABB" strokeWidth={2} fill="url(#inflowGrad2)" name="Inflows (Disbursements)" />
+                <Area type="monotone" dataKey="outflows" stroke="#F5A623" strokeWidth={2} fill="url(#outflowGrad2)" name="Outflows (Fees/Repayments)" />
+              </AreaChart>
+            </ResponsiveContainer>
+          )}
         </div>
 
         {/* Financing Utilization Gauge */}
@@ -220,25 +212,31 @@ export default function Analytics() {
             <h2 className="text-lg font-semibold text-gray-900">Portfolio Risk Distribution</h2>
           </div>
           <div className="h-[260px]">
-            <ResponsiveContainer width="100%" height="100%">
-              <PieChart>
-                <Pie
-                  data={portfolioRisk}
-                  cx="50%"
-                  cy="50%"
-                  innerRadius={60}
-                  outerRadius={90}
-                  paddingAngle={4}
-                  dataKey="value"
-                >
-                  {portfolioRisk.map((entry, index) => (
-                    <Cell key={`cell-${index}`} fill={entry.color} />
-                  ))}
-                </Pie>
-                <Tooltip contentStyle={{ borderRadius: 8, border: '1px solid #e5e7eb', fontSize: 12 }} />
-                <Legend verticalAlign="bottom" height={36} iconType="circle" />
-              </PieChart>
-            </ResponsiveContainer>
+            {loading ? (
+              <div className="h-full flex items-center justify-center">
+                <div className="w-full h-full animate-pulse bg-gray-100 rounded-2xl" />
+              </div>
+            ) : (
+              <ResponsiveContainer width="100%" height="100%">
+                <PieChart>
+                  <Pie
+                    data={portfolioRisk}
+                    cx="50%"
+                    cy="50%"
+                    innerRadius={60}
+                    outerRadius={90}
+                    paddingAngle={4}
+                    dataKey="value"
+                  >
+                    {portfolioRisk.map((entry, index) => (
+                      <Cell key={`cell-${index}`} fill={entry.color} />
+                    ))}
+                  </Pie>
+                  <Tooltip contentStyle={{ borderRadius: 8, border: '1px solid #e5e7eb', fontSize: 12 }} />
+                  <Legend verticalAlign="bottom" height={36} iconType="circle" />
+                </PieChart>
+              </ResponsiveContainer>
+            )}
           </div>
         </div>
 
@@ -273,17 +271,27 @@ export default function Analytics() {
           <TrendingUp className="w-5 h-5 text-tng-blue" />
           <h2 className="text-lg font-semibold text-gray-900">Payment Patterns</h2>
         </div>
-        <ResponsiveContainer width="100%" height={260}>
-          <BarChart data={paymentPatterns} margin={{ top: 5, right: 5, left: 0, bottom: 5 }}>
-            <CartesianGrid strokeDasharray="3 3" stroke="#f3f4f6" />
-            <XAxis dataKey="month" tick={{ fontSize: 12 }} />
-            <YAxis tick={{ fontSize: 12 }} />
-            <Tooltip contentStyle={{ borderRadius: 8, border: '1px solid #e5e7eb', fontSize: 12 }} />
-            <Legend />
-            <Bar dataKey="onTime" name="On-Time Repayments" fill="#22c55e" radius={[4, 4, 0, 0]} />
-            <Bar dataKey="late" name="Late Repayments" fill="#ef4444" radius={[4, 4, 0, 0]} />
-          </BarChart>
-        </ResponsiveContainer>
+        {loading ? (
+          <div className="h-[260px] flex items-center justify-center">
+            <div className="w-full h-full animate-pulse bg-gray-100 rounded-2xl" />
+          </div>
+        ) : paymentPatterns.length === 0 ? (
+          <div className="h-[260px] flex items-center justify-center text-gray-400 text-sm">
+            No payment pattern data available yet.
+          </div>
+        ) : (
+          <ResponsiveContainer width="100%" height={260}>
+            <BarChart data={paymentPatterns} margin={{ top: 5, right: 5, left: 0, bottom: 5 }}>
+              <CartesianGrid strokeDasharray="3 3" stroke="#f3f4f6" />
+              <XAxis dataKey="month" tick={{ fontSize: 12 }} />
+              <YAxis tick={{ fontSize: 12 }} />
+              <Tooltip contentStyle={{ borderRadius: 8, border: '1px solid #e5e7eb', fontSize: 12 }} />
+              <Legend />
+              <Bar dataKey="onTime" name="On-Time Repayments" fill="#22c55e" radius={[4, 4, 0, 0]} />
+              <Bar dataKey="late" name="Late Repayments" fill="#ef4444" radius={[4, 4, 0, 0]} />
+            </BarChart>
+          </ResponsiveContainer>
+        )}
       </div>
     </div>
   );

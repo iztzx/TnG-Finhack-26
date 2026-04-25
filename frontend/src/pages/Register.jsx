@@ -143,7 +143,7 @@ const Register = () => {
             <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12"></polyline></svg>
           </div>
           <h2 style={{ color: 'white', fontSize: '22px', fontWeight: 700, marginBottom: '8px' }}>Account Created!</h2>
-          <p style={{ color: 'rgba(255,255,255,0.5)', fontSize: '14px', marginBottom: '8px' }}>Welcome to PantasFlow, {formData.fullName.split(' ')[0]}!</p>
+          <p style={{ color: 'rgba(255,255,255,0.5)', fontSize: '14px', marginBottom: '8px' }}>Welcome to OUT&IN, {formData.fullName.split(' ')[0]}!</p>
           <p style={{ color: 'rgba(255,255,255,0.4)', fontSize: '13px', marginBottom: '32px' }}>Redirecting you to your dashboard...</p>
           <div style={{ width: '100%', height: '4px', background: 'rgba(255,255,255,0.1)', borderRadius: '2px', overflow: 'hidden' }}>
             <div style={{ height: '100%', background: 'linear-gradient(90deg, #16A34A, #22C55E)', width: '100%', animation: 'progress 2.5s linear' }}></div>
@@ -168,7 +168,7 @@ const Register = () => {
             <path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5" stroke="white" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
           </svg>
         </div>
-        <span style={{ color: 'white', fontWeight: 700, fontSize: '18px', letterSpacing: '-0.01em' }}>PantasFlow</span>
+        <span style={{ color: 'white', fontWeight: 700, fontSize: '18px', letterSpacing: '-0.01em' }}>OUT&IN</span>
       </div>
 
       {renderProgress()}
@@ -425,7 +425,7 @@ const Register = () => {
                 className="mt-1 w-4 h-4 rounded border-gray-300 bg-transparent text-blue-600 focus:ring-blue-600"
               />
               <span className="text-[13px] text-white/60 group-hover:text-white/80 transition-colors">
-                I agree to PantasFlow's <span style={{ color: '#60A5FA' }}>Terms of Service</span> and <span style={{ color: '#60A5FA' }}>Privacy Policy</span>
+                I agree to OUT&IN's <span style={{ color: '#60A5FA' }}>Terms of Service</span> and <span style={{ color: '#60A5FA' }}>Privacy Policy</span>
               </span>
             </label>
 

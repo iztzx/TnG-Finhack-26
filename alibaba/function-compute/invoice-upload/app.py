@@ -41,6 +41,11 @@ def handle_invoice_upload():
         contentType=request.content_type or "",
     )
 
+    # Extract userId (optional, forwarded to AWS webhook)
+    user_id = (request.form.get("userId") or request.form.get("user_id") or "").strip()
+    shipment_number = (request.form.get("shipmentNumber") or request.form.get("shipment_number") or "").strip()
+    contact_email = (request.form.get("contactEmail") or request.form.get("contact_email") or "").strip()
+
     # Validate file upload
     if "file" not in request.files:
         log_event("invoice_upload_validation_failed", requestId=request_id, reason="Missing required file upload field")
@@ -76,6 +81,10 @@ def handle_invoice_upload():
             mimeType=mime_type,
             extractedAmount=extracted_data["extractedAmount"],
         )
+    except ValueError as exc:
+        # Validation errors (unsupported file type, non-invoice document) are client errors
+        log_event("invoice_upload_validation_failed", requestId=request_id, fileName=file_name, reason=str(exc))
+        return jsonify({"success": False, "requestId": request_id, "errorCode": "INVALID_UPLOAD", "message": str(exc)}), 400
     except Exception as exc:
         import requests as req_lib
         if isinstance(exc, req_lib.exceptions.RequestException):
@@ -86,7 +95,7 @@ def handle_invoice_upload():
 
     # Post to AWS webhook
     try:
-        webhook_response = post_to_aws_webhook(invoice_id, extracted_data)
+        webhook_response = post_to_aws_webhook(invoice_id, extracted_data, user_id, shipment_number, contact_email)
         log_event("aws_webhook_response_received", requestId=request_id, invoiceId=invoice_id, statusCode=webhook_response.status_code)
     except Exception as exc:
         import requests as req_lib

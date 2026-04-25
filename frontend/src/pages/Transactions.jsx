@@ -1,19 +1,9 @@
 import { useState, useEffect } from 'react';
-import { Download, Filter, Calendar, FileSpreadsheet, ArrowUpDown, ArrowUp, ArrowDown, CircleDollarSign, Clock3, BadgeCheck, ReceiptText } from 'lucide-react';
+import { Download, Filter, Calendar, FileSpreadsheet, ArrowUpDown, ArrowUp, ArrowDown, CircleDollarSign, Clock3, BadgeCheck, ReceiptText, Wallet } from 'lucide-react';
+import { useAuth } from '../context/AuthContext';
 import { listInvoices, downloadReconciliation } from '../lib/api';
 
 const filterOptions = ['ALL', 'FUNDED', 'REPAID', 'PENDING_REVIEW', 'OFFER_MADE', 'ANALYZED'];
-
-const mockInvoices = [
-  { invoiceId: 'INV-98234', vendorName: 'Syarikat ABC Sdn Bhd', amount: 15000, totalFeeRate: 0.03, factoringFee: 450, netDisbursement: 13800, status: 'FUNDED', invoiceDate: '2026-04-20', dueDate: '2026-05-15' },
-  { invoiceId: 'INV-77102', vendorName: 'Mega Logistics Malaysia', amount: 25000, totalFeeRate: 0.025, factoringFee: 625, netDisbursement: 23000, status: 'REPAID', invoiceDate: '2026-03-15', dueDate: '2026-04-15' },
-  { invoiceId: 'INV-88341', vendorName: 'Penang Electronics Sdn Bhd', amount: 42000, totalFeeRate: 0.035, factoringFee: 1470, netDisbursement: 38430, status: 'FUNDED', invoiceDate: '2026-04-18', dueDate: '2026-05-20' },
-  { invoiceId: 'INV-55219', vendorName: 'Kuala Lumpur Textiles', amount: 8500, totalFeeRate: 0.03, factoringFee: 255, netDisbursement: 7820, status: 'PENDING_REVIEW', invoiceDate: '2026-04-22', dueDate: '2026-05-22' },
-  { invoiceId: 'INV-33901', vendorName: 'Johor Bahru Manufacturing Co', amount: 67000, totalFeeRate: 0.02, factoringFee: 1340, netDisbursement: 62320, status: 'OFFER_MADE', invoiceDate: '2026-04-10', dueDate: '2026-05-10' },
-  { invoiceId: 'INV-11287', vendorName: 'Selangor Fresh Produce Sdn Bhd', amount: 12000, totalFeeRate: 0.03, factoringFee: 360, netDisbursement: 11040, status: 'REPAID', invoiceDate: '2026-02-20', dueDate: '2026-03-20' },
-  { invoiceId: 'INV-44512', vendorName: 'Sabah Timber Exports', amount: 34000, totalFeeRate: 0.028, factoringFee: 952, netDisbursement: 31248, status: 'FUNDED', invoiceDate: '2026-04-05', dueDate: '2026-05-05' },
-  { invoiceId: 'INV-66783', vendorName: 'Sarawak Seafood Trading', amount: 18500, totalFeeRate: 0.032, factoringFee: 592, netDisbursement: 16963, status: 'ANALYZED', invoiceDate: '2026-04-21', dueDate: '2026-05-21' },
-];
 
 const statusColors = {
   FUNDED: 'bg-green-50 text-green-700',
@@ -24,15 +14,18 @@ const statusColors = {
 };
 
 export default function Transactions() {
+  const { userProfile } = useAuth();
   const [filter, setFilter] = useState('ALL');
   const [dateRange, setDateRange] = useState('Last 30 Days');
   const [downloading, setDownloading] = useState(false);
-  const [invoices, setInvoices] = useState(mockInvoices);
+  const [invoices, setInvoices] = useState([]);
+  const [loading, setLoading] = useState(true);
   const [sortKey, setSortKey] = useState(null);
   const [sortDir, setSortDir] = useState('asc');
 
   useEffect(() => {
     async function load() {
+      setLoading(true);
       try {
         const data = await listInvoices();
         if (data?.invoices?.length > 0) {
@@ -50,10 +43,16 @@ export default function Transactions() {
           setInvoices(mapped);
         }
       } catch {
-        // keep mock data
+        // keep empty
+      } finally {
+        setLoading(false);
       }
     }
     load();
+
+    const handleRefresh = () => load();
+    window.addEventListener('transactions:refresh', handleRefresh);
+    return () => window.removeEventListener('transactions:refresh', handleRefresh);
   }, []);
 
   const handleSort = (key) => {
@@ -65,8 +64,29 @@ export default function Transactions() {
     }
   };
 
+  const isWithinDateRange = (dateStr) => {
+    if (!dateStr || dateRange === 'Last 30 Days') return true;
+    const date = new Date(dateStr).getTime();
+    if (Number.isNaN(date)) return true;
+    const now = Date.now();
+    const oneDay = 24 * 60 * 60 * 1000;
+    switch (dateRange) {
+      case 'Today':
+        return now - date < oneDay;
+      case 'Last 7 Days':
+        return now - date < 7 * oneDay;
+      case 'This Month':
+        return new Date().getMonth() === new Date(dateStr).getMonth() && new Date().getFullYear() === new Date(dateStr).getFullYear();
+      case 'This Year':
+        return new Date().getFullYear() === new Date(dateStr).getFullYear();
+      default:
+        return true;
+    }
+  };
+
   const filtered = invoices
     .filter((inv) => filter === 'ALL' || inv.status === filter)
+    .filter((inv) => isWithinDateRange(inv.invoiceDate || inv.timestamp))
     .sort((a, b) => {
       if (!sortKey) return 0;
       const aVal = a[sortKey];
@@ -82,6 +102,7 @@ export default function Transactions() {
   const averageAdvanceRate = invoices.length
     ? invoices.reduce((sum, i) => sum + (((i.netDisbursement || 0) / Math.max(i.amount || 1, 1)) * 100), 0) / invoices.length
     : 0;
+  const walletBalance = userProfile?.walletBalance ?? 0;
 
   const handleDownload = async () => {
     setDownloading(true);
@@ -150,7 +171,16 @@ export default function Transactions() {
         </div>
       </div>
 
-      <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-4">
+      <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-5">
+        <div className="rounded-[28px] border border-white/70 bg-white/88 p-5 shadow-sm backdrop-blur">
+          <div className="flex items-center justify-between">
+            <p className="text-sm text-slate-500">Wallet Balance</p>
+            <div className="rounded-2xl bg-emerald-50 p-2.5 text-emerald-600">
+              <Wallet className="h-5 w-5" />
+            </div>
+          </div>
+          <p className="mt-4 text-2xl font-semibold text-slate-900">RM {Number(walletBalance).toLocaleString()}</p>
+        </div>
         <div className="rounded-[28px] border border-white/70 bg-white/88 p-5 shadow-sm backdrop-blur">
           <div className="flex items-center justify-between">
             <p className="text-sm text-slate-500">Total advanced</p>
@@ -246,26 +276,38 @@ export default function Transactions() {
               </tr>
             </thead>
             <tbody>
-              {filtered.map((row) => (
-                <tr key={row.invoiceId} className="border-b border-slate-50 transition-colors hover:bg-slate-50/60">
-                  <td className="px-4 py-4 font-mono text-slate-600">{row.invoiceId}</td>
-                  <td className="px-4 py-4 font-medium text-slate-900">{row.vendorName}</td>
-                  <td className="px-4 py-4 text-slate-700">RM {row.amount.toLocaleString()}</td>
-                  <td className="px-4 py-4 font-medium text-slate-900">RM {row.netDisbursement.toLocaleString()}</td>
-                  <td className="px-4 py-3">
-                    <span className={`inline-flex px-2.5 py-1 rounded-full text-xs font-medium ${statusColors[row.status] || 'bg-gray-50 text-gray-700'}`}>
-                      {row.status.replace(/_/g, ' ')}
-                    </span>
-                  </td>
-                  <td className="px-4 py-4 text-slate-500">{row.dueDate}</td>
-                  <td className="px-4 py-4 text-slate-500">{row.invoiceDate}</td>
-                </tr>
-              ))}
+              {loading ? (
+                Array.from({ length: 5 }).map((_, i) => (
+                  <tr key={i} className="border-b border-slate-50">
+                    {headers.map((h) => (
+                      <td key={h.key} className="px-4 py-4">
+                        <div className="h-4 bg-slate-100 rounded animate-pulse w-24" />
+                      </td>
+                    ))}
+                  </tr>
+                ))
+              ) : (
+                filtered.map((row) => (
+                  <tr key={row.invoiceId} className="border-b border-slate-50 transition-colors hover:bg-slate-50/60">
+                    <td className="px-4 py-4 font-mono text-slate-600">{row.invoiceId}</td>
+                    <td className="px-4 py-4 font-medium text-slate-900">{row.vendorName}</td>
+                    <td className="px-4 py-4 text-slate-700">RM {row.amount.toLocaleString()}</td>
+                    <td className="px-4 py-4 font-medium text-slate-900">RM {row.netDisbursement.toLocaleString()}</td>
+                    <td className="px-4 py-3">
+                      <span className={`inline-flex px-2.5 py-1 rounded-full text-xs font-medium ${statusColors[row.status] || 'bg-gray-50 text-gray-700'}`}>
+                        {row.status.replace(/_/g, ' ')}
+                      </span>
+                    </td>
+                    <td className="px-4 py-4 text-slate-500">{row.dueDate}</td>
+                    <td className="px-4 py-4 text-slate-500">{row.invoiceDate}</td>
+                  </tr>
+                ))
+              )}
             </tbody>
           </table>
         </div>
 
-        {filtered.length === 0 && (
+        {!loading && filtered.length === 0 && (
           <div className="text-center py-12 text-gray-400">
             <FileSpreadsheet className="w-8 h-8 mx-auto mb-2" />
             <p className="text-sm">No transactions match the selected filter.</p>

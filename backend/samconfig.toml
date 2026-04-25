@@ -12,7 +12,7 @@ s3_prefix = "tng-finhack-backend"
 region = "ap-southeast-1"
 confirm_changeset = true
 capabilities = "CAPABILITY_IAM CAPABILITY_NAMED_IAM"
-parameter_overrides = "Environment=\"dev\""
+parameter_overrides = "Environment=\"dev\" JwtSecret=\"vj9DJ-_G23cYLXcU6P0rMHi5r4qiSJMHIy_-H0xfTwg\""
 resolve_s3 = true
 image_repositories = []
 

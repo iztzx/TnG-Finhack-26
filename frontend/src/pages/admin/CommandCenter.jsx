@@ -1,8 +1,10 @@
 import React from 'react';
+import { useNavigate } from 'react-router-dom';
 import { Activity, AlertCircle, Clock, FileText, RefreshCw, ShieldCheck, Wallet, ArrowRight, Banknote, TimerReset, CheckCircle2, TrendingUp } from 'lucide-react';
 import { getAdminOverview } from '../../lib/api';
 
 export default function CommandCenter() {
+  const navigate = useNavigate();
   const [lastUpdated, setLastUpdated] = React.useState(new Date());
   const [isRefreshing, setIsRefreshing] = React.useState(false);
   const [metrics, setMetrics] = React.useState({
@@ -68,10 +70,10 @@ export default function CommandCenter() {
   ];
 
   const actionQueue = [
-    { title: 'Review pending invoices', meta: `${metrics.pendingReview} submissions waiting on action`, accent: 'bg-blue-600', count: String(metrics.pendingReview) },
-    { title: 'Approve disbursement batches', meta: '5 ready after risk checks', accent: 'bg-slate-700', count: '5' },
-    { title: 'Resolve fraud alerts', meta: '1 high-priority anomaly surfaced', accent: 'bg-rose-600', count: '1' },
-    { title: 'Generate treasury report', meta: 'Export today\'s funding summary', accent: 'bg-emerald-600', count: 'Live' },
+    { title: 'Review pending invoices', meta: `${metrics.pendingReview} submissions waiting on action`, accent: 'bg-blue-600', count: String(metrics.pendingReview), route: '/admin/review' },
+    { title: 'Approve disbursement batches', meta: '5 ready after risk checks', accent: 'bg-slate-700', count: '5', route: '/admin/ledger' },
+    { title: 'Resolve fraud alerts', meta: '1 high-priority anomaly surfaced', accent: 'bg-rose-600', count: '1', route: '/admin/audit' },
+    { title: 'Generate treasury report', meta: 'Export today\'s funding summary', accent: 'bg-emerald-600', count: 'Live', route: '/admin/system' },
   ];
 
   return (
@@ -165,7 +167,7 @@ export default function CommandCenter() {
             <h2 className="text-lg font-semibold text-white">Action queue</h2>
             <div className="mt-5 space-y-3">
               {actionQueue.map((item) => (
-                <button key={item.title} className={`w-full rounded-3xl ${item.accent} px-4 py-4 text-left text-white transition-transform hover:-translate-y-0.5`}>
+                <button key={item.title} onClick={() => navigate(item.route)} className={`w-full rounded-3xl ${item.accent} px-4 py-4 text-left text-white transition-transform hover:-translate-y-0.5`}>
                   <div className="flex items-center justify-between gap-3">
                     <div>
                       <p className="text-sm font-semibold">{item.title}</p>

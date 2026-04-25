@@ -24,7 +24,7 @@ Bottom of the left sidebar in the user dashboard
 ```
 ┌─────────────────────────────┐
 │  [Avatar] Company Name      │
-│           user@email.com    │
+│           user@outandin.com │
 ├─────────────────────────────┤
 │  [Logout Icon] Sign Out     │
 ├─────────────────────────────┤
@@ -54,7 +54,7 @@ Bottom of the left sidebar in the admin dashboard
 ```
 ┌─────────────────────────────┐
 │  [Avatar] Admin User        │
-│           admin@email.com   │
+│           admin@outandin.com│
 ├─────────────────────────────┤
 │  [Logout Icon] Sign Out     │
 └─────────────────────────────┘
@@ -78,13 +78,13 @@ Added quick login buttons for easy testing
 5. Click "Sign In" to login
 
 ### Demo Credentials
-- **User Account**: 
-  - Email: `user@pantasflow.com`
-  - Password: `demo123`
-  
-- **Admin Account**: 
-  - Email: `admin@pantasflow.com`
-  - Password: `admin123`
+- **User Account**:
+  - Email: `user@outandin.com`
+  - Password: `Demo@123`
+
+- **Admin Account**:
+  - Email: `admin@outandin.com`
+  - Password: `Admin@123`
 
 ## Technical Details
 

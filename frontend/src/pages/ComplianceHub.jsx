@@ -3,15 +3,6 @@ import { GitBranch, Server, BookOpen, ClipboardList } from 'lucide-react';
 import ComplianceBadge from '../components/ComplianceBadge';
 import { getAuditTrail } from '../lib/api';
 
-const defaultAuditTrail = [
-  { id: 'AUD-001', action: 'User login', user: 'admin@tng.com', timestamp: '2026-04-24 14:30:00', severity: 'Info' },
-  { id: 'AUD-002', action: 'Invoice uploaded for financing', user: 'system', timestamp: '2026-04-24 14:28:15', severity: 'Info' },
-  { id: 'AUD-003', action: 'Credit score updated via ML model', user: 'system', timestamp: '2026-04-24 14:28:16', severity: 'Info' },
-  { id: 'AUD-004', action: 'Data export initiated', user: 'analyst@tng.com', timestamp: '2026-04-24 14:15:00', severity: 'Warning' },
-  { id: 'AUD-005', action: 'Partner location feed sync completed', user: 'system', timestamp: '2026-04-24 13:45:22', severity: 'Info' },
-  { id: 'AUD-006', action: 'Policy configuration changed', user: 'admin@tng.com', timestamp: '2026-04-24 12:00:00', severity: 'Critical' },
-];
-
 const regulations = [
   { code: 'PSA 2003', name: 'Payment Systems Act 2003', description: 'Governs payment systems and e-money issuance in Malaysia.', url: 'https://www.bnm.gov.my/documents/20124/1105151/psa_2003.pdf' },
   { code: 'PDPA 2010', name: 'Personal Data Protection Act 2010', description: 'Regulates processing of personal data in commercial transactions.', url: 'https://www.pdp.gov.my/jpdpv2/laws-of-malaysia-pdpa/personal-data-protection-act-2010/' },
@@ -21,17 +12,21 @@ const regulations = [
 ];
 
 export default function ComplianceHub() {
-  const [auditTrail, setAuditTrail] = useState(defaultAuditTrail);
+  const [auditTrail, setAuditTrail] = useState([]);
+  const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     async function load() {
+      setLoading(true);
       try {
         const data = await getAuditTrail();
         if (data?.entries?.length > 0) {
           setAuditTrail(data.entries);
         }
       } catch {
-        // keep defaults
+        // keep empty
+      } finally {
+        setLoading(false);
       }
     }
     load();
@@ -138,23 +133,41 @@ export default function ComplianceHub() {
               </tr>
             </thead>
             <tbody>
-              {auditTrail.map((row) => (
-                <tr key={row.id} className="border-b border-gray-50 hover:bg-gray-50/50">
-                  <td className="px-4 py-3 font-mono text-gray-600">{row.id}</td>
-                  <td className="px-4 py-3 text-gray-900">{row.action}</td>
-                  <td className="px-4 py-3 text-gray-600">{row.user}</td>
-                  <td className="px-4 py-3 text-gray-500">{row.timestamp}</td>
-                  <td className="px-4 py-3">
-                    <span className={`inline-flex px-2 py-0.5 rounded text-xs font-medium ${
-                      row.severity === 'Info' ? 'bg-blue-50 text-blue-700' :
-                      row.severity === 'Warning' ? 'bg-yellow-50 text-yellow-700' :
-                      'bg-red-50 text-red-700'
-                    }`}>
-                      {row.severity}
-                    </span>
+              {loading ? (
+                Array.from({ length: 5 }).map((_, i) => (
+                  <tr key={i} className="border-b border-gray-50">
+                    <td className="px-4 py-3"><div className="h-3 bg-gray-100 rounded animate-pulse w-16" /></td>
+                    <td className="px-4 py-3"><div className="h-3 bg-gray-100 rounded animate-pulse w-40" /></td>
+                    <td className="px-4 py-3"><div className="h-3 bg-gray-100 rounded animate-pulse w-24" /></td>
+                    <td className="px-4 py-3"><div className="h-3 bg-gray-100 rounded animate-pulse w-20" /></td>
+                    <td className="px-4 py-3"><div className="h-3 bg-gray-100 rounded animate-pulse w-12" /></td>
+                  </tr>
+                ))
+              ) : auditTrail.length === 0 ? (
+                <tr>
+                  <td colSpan={5} className="px-4 py-8 text-center text-sm text-gray-400">
+                    No audit entries available.
                   </td>
                 </tr>
-              ))}
+              ) : (
+                auditTrail.map((row) => (
+                  <tr key={row.id} className="border-b border-gray-50 hover:bg-gray-50/50">
+                    <td className="px-4 py-3 font-mono text-gray-600">{row.id}</td>
+                    <td className="px-4 py-3 text-gray-900">{row.action}</td>
+                    <td className="px-4 py-3 text-gray-600">{row.user}</td>
+                    <td className="px-4 py-3 text-gray-500">{row.timestamp}</td>
+                    <td className="px-4 py-3">
+                      <span className={`inline-flex px-2 py-0.5 rounded text-xs font-medium ${
+                        row.severity === 'Info' ? 'bg-blue-50 text-blue-700' :
+                        row.severity === 'Warning' ? 'bg-yellow-50 text-yellow-700' :
+                        'bg-red-50 text-red-700'
+                      }`}>
+                        {row.severity}
+                      </span>
+                    </td>
+                  </tr>
+                ))
+              )}
             </tbody>
           </table>
         </div>
