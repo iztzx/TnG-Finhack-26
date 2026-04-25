@@ -97,6 +97,14 @@ def handle_invoice_upload():
         return jsonify({"success": False, "requestId": request_id, "invoiceId": invoice_id, "errorCode": "CONFIGURATION_ERROR", "message": str(exc)}), 500
 
     if 200 <= webhook_response.status_code < 300:
+        # Parse the webhook response body to extract the offer data
+        # The AWS webhook Lambda creates the offer synchronously, so the
+        # offer is already available in the response – no need to poll.
+        try:
+            webhook_data = webhook_response.json()
+        except Exception:
+            webhook_data = {}
+
         return jsonify({
             "success": True,
             "requestId": request_id,
@@ -107,6 +115,7 @@ def handle_invoice_upload():
                 "mimeType": mime_type,
                 "extractedData": extracted_data,
                 "awsStatusCode": webhook_response.status_code,
+                "offer": webhook_data.get("offer"),
             },
         })
 

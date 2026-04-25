@@ -7,6 +7,12 @@ Parameters:
     Default: dev
     AllowedPattern: ^[a-z0-9-]+$
     Description: Deployment environment suffix used for resource naming.
+  JwtSecret:
+    Type: String
+    NoEcho: true
+    Description: JWT signing secret for auth tokens. Set via --parameter-overrides
+      or samconfig.toml.
+    MinLength: 16
 Globals:
   Function:
     Runtime: python3.12
@@ -255,7 +261,8 @@ Resources:
         Variables:
           USERS_TABLE:
             Ref: UsersTable
-          JWT_SECRET: tng-finhack-jwt-secret-2026-hackathon
+          JWT_SECRET:
+            Ref: JwtSecret
           LOG_LEVEL: INFO
       Timeout: 30
       MemorySize: 256

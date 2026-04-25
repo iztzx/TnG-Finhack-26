@@ -150,6 +150,23 @@ def parse_json_from_model(raw_content: str) -> dict:
     data["extractedAmount"] = float(data["extractedAmount"])
     data["confidenceScore"] = float(data["confidenceScore"])
 
+    # Normalize confidence: AI models sometimes return percentages (0-100)
+    # instead of decimals (0-1); clamp to the 0-1 range the AWS webhook expects.
+    # Guard zero/negative amount: AWS Pydantic model enforces gt=0
+    if data["extractedAmount"] <= 0:
+        data["extractedAmount"] = 1.0  # safe floor for validation
+
+    if data["confidenceScore"] > 1.0:
+        data["confidenceScore"] = min(data["confidenceScore"] / 100.0, 1.0)
+
+    # Guard required non-nullable fields – the AI prompt says "Use null for
+    # fields that are not visible", but the AWS Pydantic schema rejects null
+    # for merchantName and documentType.  Provide safe fallback defaults.
+    if not data.get("merchantName") or data["merchantName"] is None:
+        data["merchantName"] = "UNKNOWN_MERCHANT"
+    if not data.get("documentType") or data["documentType"] is None:
+        data["documentType"] = "UNKNOWN"
+
     # Normalize common non-ISO currency codes to ISO 4217
     currency_aliases = {
         "RM": "MYR",
@@ -292,7 +309,7 @@ def extract_invoice_with_alibaba_ai(file_bytes: bytes, file_name: str, mime_type
     raise ValueError("Unsupported file type. Allowed types: PDF, JPG, PNG")
 
 
-def post_to_aws_webhook(invoice_id: str, extracted_data: dict) -> requests.Response:
+def post_to_aws_webhook(invoice_id: str, extracted_data: dict):
     aws_webhook_url = os.getenv("AWS_WEBHOOK_URL")
     if not aws_webhook_url:
         raise RuntimeError("AWS_WEBHOOK_URL is not configured")
@@ -312,6 +329,16 @@ def post_to_aws_webhook(invoice_id: str, extracted_data: dict) -> requests.Respo
         headers={"Content-Type": "application/json"},
         timeout=REQUEST_TIMEOUT_SECONDS,
     )
+
+    if response.status_code >= 400:
+        log_event(
+            "aws_webhook_non_2xx",
+            invoiceId=invoice_id,
+            awsStatusCode=response.status_code,
+            awsResponseBody=response.text[:2000],
+            sentPayload=payload,
+        )
+
     return response
 
 
@@ -452,6 +479,14 @@ def handler(environ, start_response):
         )
 
     if 200 <= webhook_response.status_code < 300:
+        # Parse the webhook response body to extract the offer data
+        # The AWS webhook Lambda creates the offer synchronously, so the
+        # offer is already available in the response – no need to poll.
+        try:
+            webhook_data = webhook_response.json()
+        except Exception:
+            webhook_data = {}
+
         return json_response(
             start_response,
             "200 OK",
@@ -465,6 +500,7 @@ def handler(environ, start_response):
                     "mimeType": mime_type,
                     "extractedData": extracted_data,
                     "awsStatusCode": webhook_response.status_code,
+                    "offer": webhook_data.get("offer"),
                 },
             },
         )

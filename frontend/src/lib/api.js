@@ -182,6 +182,7 @@ export async function uploadToAlibaba(file) {
     fileName: result.data?.fileName,
     mimeType: result.data?.mimeType,
     awsStatusCode: result.data?.awsStatusCode,
+    offer: result.data?.offer || null,
   };
 }
 

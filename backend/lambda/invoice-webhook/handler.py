@@ -88,14 +88,38 @@ class ExtractedData(BaseModel):
     """AI-extracted invoice fields sent by Alibaba Cloud."""
     extractedAmount: float = Field(..., gt=0, description="Invoice total extracted by Document AI")
     currency: str = Field(..., min_length=3, max_length=3, description="ISO 4217 currency code")
-    merchantName: str = Field(..., min_length=1, description="Merchant / seller name")
-    documentType: str = Field(..., min_length=1, description="Document type detected by AI")
+    merchantName: str = Field("UNKNOWN_MERCHANT", min_length=1, description="Merchant / seller name")
+    documentType: str = Field("UNKNOWN", min_length=1, description="Document type detected by AI")
     confidenceScore: float = Field(..., ge=0.0, le=1.0, description="AI extraction confidence 0-1")
     invoiceNumber: Optional[str] = None
     issueDate: Optional[str] = None
     dueDate: Optional[str] = None
     buyerName: Optional[str] = None
     sellerName: Optional[str] = None
+
+    @field_validator("confidenceScore")
+    @classmethod
+    def normalize_confidence(cls, v: float) -> float:
+        """AI models may return confidence as a percentage (0-100) instead of 0-1."""
+        if v > 1.0:
+            v = min(v / 100.0, 1.0)
+        return v
+
+    @field_validator("merchantName", mode="before")
+    @classmethod
+    def coerce_merchant_name(cls, v):
+        """AI may return null for merchantName; replace with a safe default."""
+        if v is None or (isinstance(v, str) and v.strip() == ""):
+            return "UNKNOWN_MERCHANT"
+        return v
+
+    @field_validator("documentType", mode="before")
+    @classmethod
+    def coerce_document_type(cls, v):
+        """AI may return null for documentType; replace with a safe default."""
+        if v is None or (isinstance(v, str) and v.strip() == ""):
+            return "UNKNOWN"
+        return v
 
     @field_validator("currency")
     @classmethod

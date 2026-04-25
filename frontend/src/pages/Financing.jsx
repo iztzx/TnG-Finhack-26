@@ -7,7 +7,7 @@ import {
   TrendingUp, Wallet,
 } from 'lucide-react';
 import RiskGauge from '../components/RiskGauge';
-import { uploadToAlibaba, getScoringOffer, acceptOffer, trackShipment, verifyShipment, subscribeToToasts } from '../lib/api';
+import { uploadToAlibaba, getScoringOffer, acceptOffer, trackShipment, verifyShipment } from '../lib/api';
 
 // ============================================================================
 // State machine constants
@@ -87,43 +87,6 @@ function OfferSkeleton() {
 // ============================================================================
 // Toast notification component
 // ============================================================================
-function Toast({ toasts, onDismiss }) {
-  return (
-    <div className="fixed top-4 right-4 z-50 space-y-2 max-w-sm">
-      <AnimatePresence>
-        {toasts.map((toast) => (
-          <motion.div
-            key={toast.id}
-            initial={{ opacity: 0, x: 80, scale: 0.95 }}
-            animate={{ opacity: 1, x: 0, scale: 1 }}
-            exit={{ opacity: 0, x: 80, scale: 0.95 }}
-            className={`flex items-start gap-3 p-4 rounded-xl shadow-lg border backdrop-blur-sm ${
-              toast.type === 'error'
-                ? 'bg-red-50/95 border-red-200 text-red-800'
-                : toast.type === 'success'
-                ? 'bg-green-50/95 border-green-200 text-green-800'
-                : 'bg-blue-50/95 border-blue-200 text-blue-800'
-            }`}
-          >
-            {toast.type === 'error' ? (
-              <AlertCircle className="w-5 h-5 mt-0.5 flex-shrink-0 text-red-500" />
-            ) : toast.type === 'success' ? (
-              <CheckCircle className="w-5 h-5 mt-0.5 flex-shrink-0 text-green-500" />
-            ) : (
-              <Cpu className="w-5 h-5 mt-0.5 flex-shrink-0 text-blue-500" />
-            )}
-            <p className="text-sm font-medium flex-1">{toast.message}</p>
-            <button onClick={() => onDismiss(toast.id)} className="flex-shrink-0 opacity-60 hover:opacity-100">
-              <X className="w-4 h-4" />
-            </button>
-          </motion.div>
-        ))}
-      </AnimatePresence>
-    </div>
-  );
-}
-
-// ============================================================================
 // Main Financing page
 // ============================================================================
 export default function Financing() {
@@ -147,26 +110,6 @@ export default function Financing() {
   const [shipmentOffer, setShipmentOffer] = useState(null);
   const [shipmentAccepted, setShipmentAccepted] = useState(false);
 
-  // Toast notifications
-  const [toasts, setToasts] = useState([]);
-
-  const fileInputRef = useRef(null);
-
-  // Subscribe to global API toast events
-  useEffect(() => {
-    const unsubscribe = subscribeToToasts(({ type, message }) => {
-      const id = Date.now() + Math.random();
-      setToasts((prev) => [...prev, { id, type, message }]);
-      setTimeout(() => {
-        setToasts((prev) => prev.filter((t) => t.id !== id));
-      }, 6000);
-    });
-    return unsubscribe;
-  }, []);
-
-  const dismissToast = useCallback((id) => {
-    setToasts((prev) => prev.filter((t) => t.id !== id));
-  }, []);
 
   // ---------------------------------------------------------------------------
   // Invoice flow actions
@@ -195,6 +138,9 @@ export default function Financing() {
 
   /**
    * Phase 1 + 2: Upload to Alibaba, then poll AWS for scoring offer.
+   * The AWS webhook Lambda creates the offer synchronously when Alibaba
+   * POSTs to it. Since Alibaba FC waits for the webhook response, the
+   * offer is already available in the upload response — no polling needed.
    */
   const processInvoice = useCallback(async () => {
     if (!file) return;
@@ -208,18 +154,41 @@ export default function Financing() {
       setInvoiceId(alibabaResult.invoiceId);
       setExtractedData(alibabaResult.extractedData);
 
-      // Phase 2: Poll AWS for the scoring offer
-      setFlowState(FlowState.POLLING_AWS_SCORING);
-      setPollAttempt(0);
+      // Phase 2: Check if the offer was returned synchronously
+      if (alibabaResult.offer) {
+        // The webhook already generated the offer — skip polling
+        const o = alibabaResult.offer;
+        setOffer({
+          offerId: o.offerId,
+          riskScore: o.riskScore ?? o.creditScore,
+          riskTier: o.riskTier,
+          approvedAmount: o.approvedAmount,
+          offerAmount: o.offerAmount,
+          netDisbursement: o.netDisbursement,
+          factoringFee: o.factoringFee,
+          totalFeeRate: o.totalFeeRate,
+          baseRate: o.baseRate,
+          riskPremium: o.riskPremium,
+          advanceRate: o.advanceRate,
+          invoiceAmount: o.invoiceAmount,
+          estimatedRepaymentDate: o.estimatedRepaymentDate,
+          scoringMethod: o.scoringMethod,
+        });
+        setFlowState(FlowState.OFFER_READY);
+      } else {
+        // Fallback: poll AWS for the scoring offer (async webhook)
+        setFlowState(FlowState.POLLING_AWS_SCORING);
+        setPollAttempt(0);
 
-      const scoringOffer = await getScoringOffer(alibabaResult.invoiceId, {
-        intervalMs: 1500,
-        maxAttempts: 20,
-        onAttempt: (attempt) => setPollAttempt(attempt),
-      });
+        const scoringOffer = await getScoringOffer(alibabaResult.invoiceId, {
+          intervalMs: 1500,
+          maxAttempts: 20,
+          onAttempt: (attempt) => setPollAttempt(attempt),
+        });
 
-      setOffer(scoringOffer);
-      setFlowState(FlowState.OFFER_READY);
+        setOffer(scoringOffer);
+        setFlowState(FlowState.OFFER_READY);
+      }
     } catch (err) {
       const msg = err.friendlyMessage || err.message || 'Processing failed';
       setErrorMessage(msg);
@@ -312,8 +281,6 @@ export default function Financing() {
 
   return (
     <div className="p-6 space-y-6">
-      <Toast toasts={toasts} onDismiss={dismissToast} />
-
       <div>
         <h1 className="text-2xl font-bold text-gray-900">Financing</h1>
         <p className="text-sm text-gray-500 mt-1">Get instant cash for your invoices and shipments</p>
