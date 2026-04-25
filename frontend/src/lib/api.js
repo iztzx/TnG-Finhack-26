@@ -2,6 +2,7 @@ import axios from 'axios';
 import {
   API_BASE_URL,
   ALIBABA_FC_URL,
+  SUPPLYLINK_BACKEND_URL,
   SCORING_POLL_INTERVAL_MS,
   SCORING_POLL_MAX_ATTEMPTS,
   REQUEST_TIMEOUT_MS,
@@ -271,6 +272,38 @@ export async function acceptOffer(offerId, userId) {
 
   const response = await api.post('/api/disburse', payload);
   return response.data;
+}
+
+/**
+ * Send a Notice of Assignment email to the buyer after the SME accepts the
+ * financing offer. The backend Lambda looks up the buyer's email from DynamoDB,
+ * composes a professional email with key agreement excerpts, and sends via SES
+ * with the agreement PDF attached.
+ *
+ * @param {object} params - Email parameters
+ * @param {string} params.invoiceId - Invoice ID
+ * @param {string} params.offerId - Accepted Offer ID
+ * @param {string} [params.buyerEmail] - Override buyer email
+ * @param {string} [params.buyerCompanyName] - Buyer company name
+ * @param {string} [params.smeCompanyName] - SME company name (Assignor)
+ * @param {string} [params.invoiceNumber] - Invoice number
+ * @param {string} [params.invoiceDate] - Invoice date
+ * @param {number} [params.invoiceAmount] - Invoice amount
+ * @param {string} [params.currency] - Currency code (default: RM)
+ * @returns {Promise<{status: string, recipient: string, messageId?: string}>}
+ */
+export async function sendAssignmentNotice(params) {
+  try {
+    const response = await api.post('/api/email/send-assignment-notice', params);
+    return response.data;
+  } catch (err) {
+    console.warn('sendAssignmentNotice error:', err.message);
+    // Non-blocking - the email is secondary to the disbursement
+    return {
+      status: 'FAILED',
+      detail: err.friendlyMessage || err.message || 'Failed to send assignment notice email',
+    };
+  }
 }
 
 // ============================================================================
