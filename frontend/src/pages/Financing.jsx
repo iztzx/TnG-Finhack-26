@@ -4,7 +4,7 @@ import confetti from 'canvas-confetti';
 import {
   Upload, FileText, Truck, CheckCircle, X, Zap, Shield, AlertTriangle,
   Banknote, Package, Cloud, Cpu, RefreshCw, AlertCircle, ArrowRight,
-  TrendingUp, Wallet, Info, Mail,
+  TrendingUp, Wallet, Info, Mail, ExternalLink, ChevronDown,
 } from 'lucide-react';
 import RiskGauge from '../components/RiskGauge';
 import { uploadToAlibaba, getScoringOffer, acceptOffer, trackShipment, verifyShipment } from '../lib/api';
@@ -14,6 +14,9 @@ import { uploadToAlibaba, getScoringOffer, acceptOffer, trackShipment, verifyShi
 // ============================================================================
 function AgreementModal({ offerAmount, onAccept, onClose }) {
   const [checked, setChecked] = useState(false);
+  const [showTerms, setShowTerms] = useState(false);
+
+  const tncPdfUrl = import.meta.env.VITE_TNC_PDF_URL || '/Out_In_TNC_Agreement.pdf';
 
   return (
     <motion.div
@@ -28,7 +31,7 @@ function AgreementModal({ offerAmount, onAccept, onClose }) {
         animate={{ scale: 1, opacity: 1 }}
         exit={{ scale: 0.95, opacity: 0 }}
         transition={{ duration: 0.2 }}
-        className="bg-white rounded-xl shadow-xl max-w-lg w-full max-h-[80vh] overflow-y-auto"
+        className="bg-white rounded-xl shadow-xl max-w-2xl w-full max-h-[90vh] overflow-y-auto flex flex-col"
         onClick={(e) => e.stopPropagation()}
       >
         <div className="p-6 border-b border-gray-100 flex items-center justify-between">
@@ -50,9 +53,54 @@ function AgreementModal({ offerAmount, onAccept, onClose }) {
               <span className="font-bold text-gray-900">RM {Number(offerAmount || 0).toLocaleString()}</span>
             </div>
             <p className="text-xs text-gray-500">
-              The repayment obligation is transferred to OUT&IN upon disbursement.
+              The repayment obligation is transferred to OUT&amp;IN upon disbursement.
             </p>
           </div>
+
+          {/* Clickable Terms of Financing */}
+          <button
+            type="button"
+            onClick={() => setShowTerms((s) => !s)}
+            className="flex items-center gap-2 text-tng-blue font-semibold hover:underline text-sm"
+          >
+            <FileText className="w-4 h-4" />
+            Terms of Financing
+            <ChevronDown className={`w-4 h-4 transition-transform ${showTerms ? 'rotate-180' : ''}`} />
+          </button>
+
+          <AnimatePresence>
+            {showTerms && (
+              <motion.div
+                initial={{ height: 0, opacity: 0 }}
+                animate={{ height: 'auto', opacity: 1 }}
+                exit={{ height: 0, opacity: 0 }}
+                transition={{ duration: 0.25 }}
+                className="overflow-hidden"
+              >
+                <div className="border border-gray-200 rounded-lg overflow-hidden bg-gray-50">
+                  <iframe
+                    src={tncPdfUrl}
+                    title="Terms and Conditions"
+                    className="w-full h-96"
+                  />
+                  <div className="p-3 border-t border-gray-200 bg-white flex items-center justify-between">
+                    <span className="text-xs text-gray-500">
+                      OUT&amp;IN Terms &amp; Conditions Agreement
+                    </span>
+                    <a
+                      href={tncPdfUrl}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="inline-flex items-center gap-1.5 text-xs font-medium text-tng-blue hover:underline"
+                    >
+                      <ExternalLink className="w-3.5 h-3.5" />
+                      View full document
+                    </a>
+                  </div>
+                </div>
+              </motion.div>
+            )}
+          </AnimatePresence>
 
           <label className="flex items-start gap-3 cursor-pointer group">
             <input
