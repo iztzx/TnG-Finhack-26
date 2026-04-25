@@ -102,6 +102,7 @@ export default function Financing() {
   const [disbursement, setDisbursement] = useState(null);
   const [errorMessage, setErrorMessage] = useState('');
   const [pollAttempt, setPollAttempt] = useState(0);
+  const [agreementOpen, setAgreementOpen] = useState(false);
 
   // Invoice metadata inputs
   const [shipmentNumber, setShipmentNumber] = useState('');
@@ -213,6 +214,7 @@ export default function Financing() {
   const handleAcceptOffer = useCallback(async () => {
     if (!offer) return;
 
+    setAgreementOpen(false);
     setFlowState(FlowState.DISBURSING);
 
     try {
@@ -475,6 +477,12 @@ export default function Financing() {
                         </span>
                       </div>
                       <div className="grid grid-cols-2 gap-4">
+                        {invoiceId && (
+                          <div>
+                            <p className="text-xs text-gray-500 uppercase">Invoice ID</p>
+                            <p className="text-sm font-medium text-gray-900">{invoiceId}</p>
+                          </div>
+                        )}
                         <div>
                           <p className="text-xs text-gray-500 uppercase">Merchant</p>
                           <p className="text-sm font-medium text-gray-900">{extractedData.merchantName || extractedData.vendor_name || 'N/A'}</p>
@@ -593,11 +601,11 @@ export default function Financing() {
                       </div>
                       <div className="mt-5 flex gap-3">
                         <button
-                          onClick={handleAcceptOffer}
+                          onClick={() => setAgreementOpen(true)}
                           className="flex-1 flex items-center justify-center gap-2 px-4 py-2.5 bg-white text-tng-blue rounded-lg text-sm font-bold hover:bg-gray-100 transition-colors"
                         >
                           <Banknote className="w-4 h-4" />
-                          Accept Offer
+                          Accept Fare
                         </button>
                         <button
                           onClick={resetInvoiceFlow}
@@ -981,6 +989,16 @@ export default function Financing() {
               </motion.div>
             )}
           </motion.div>
+        )}
+      </AnimatePresence>
+
+      <AnimatePresence>
+        {agreementOpen && offer && (
+          <AgreementModal
+            offerAmount={offer.netDisbursement}
+            onAccept={handleAcceptOffer}
+            onClose={() => setAgreementOpen(false)}
+          />
         )}
       </AnimatePresence>
     </div>

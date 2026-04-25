@@ -31,16 +31,19 @@ export default function AIAssistant() {
     setInput('');
     setTyping(true);
 
-    // Build history for context
-    const history = messages
-      .filter((m) => m.id !== 'welcome')
-      .map((m) => ({ role: m.role, content: m.text }));
-
     try {
-      const reply = await getResponse(userMsg.text, history);
-      setMessages((prev) => [...prev, { id: (Date.now() + 1).toString(), role: 'assistant', text: reply }]);
-    } catch {
-      setMessages((prev) => [...prev, { id: (Date.now() + 1).toString(), role: 'assistant', text: "Sorry, I couldn't process that. Please try again." }]);
+      const result = await queryAIAssistant({
+        userId: user?.userId || userProfile?.userId || userProfile?.email || 'USER-001',
+        message: userMsg.text,
+      });
+      setMessages((prev) => [...prev, { id: (Date.now() + 1).toString(), role: 'assistant', text: result.response }]);
+    } catch (err) {
+      const detail = err.response?.data?.error || err.message || 'Backend request failed';
+      setMessages((prev) => [...prev, {
+        id: (Date.now() + 1).toString(),
+        role: 'assistant',
+        text: `I could not reach the live RAG backend for this context. ${detail}`,
+      }]);
     } finally {
       setTyping(false);
     }
@@ -67,8 +70,8 @@ export default function AIAssistant() {
             <Sparkles className="w-5 h-5 text-tng-blue" />
           </div>
           <div>
-            <p className="text-sm font-semibold text-gray-900">TnG Financing Assistant</p>
-            <p className="text-xs text-gray-500">Powered by AI · Typically replies instantly</p>
+            <p className="text-sm font-semibold text-gray-900">Out&In Agent</p>
+            <p className="text-xs text-gray-500">Answers general questions and checks your live shipment context when needed</p>
           </div>
         </div>
 
@@ -130,7 +133,7 @@ export default function AIAssistant() {
               value={input}
               onChange={(e) => setInput(e.target.value)}
               onKeyDown={handleKeyDown}
-              placeholder="Ask about fees, eligibility, or your credit score..."
+              placeholder="Ask about this invoice, shipment, or financing eligibility..."
               className="flex-1 px-4 py-2.5 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-tng-blue/20"
             />
             <button
@@ -145,8 +148,8 @@ export default function AIAssistant() {
             {[
               "What's my factoring rate?",
               'How does invoice financing work?',
-              'What fees do I pay?',
-              'Am I eligible?',
+              'Where is my shipment?',
+              'Are my shipments eligible for financing?',
             ].map((q) => (
               <button
                 key={q}
