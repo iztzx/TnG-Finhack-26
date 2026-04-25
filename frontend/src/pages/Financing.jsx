@@ -1,4 +1,4 @@
-import { useState, useRef, useCallback, useEffect } from 'react';
+import { useState, useRef, useCallback } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import confetti from 'canvas-confetti';
 import {
@@ -8,6 +8,86 @@ import {
 } from 'lucide-react';
 import RiskGauge from '../components/RiskGauge';
 import { uploadToAlibaba, getScoringOffer, acceptOffer, trackShipment, verifyShipment } from '../lib/api';
+
+// ============================================================================
+// Agreement Modal — shown before accepting a financing offer
+// ============================================================================
+function AgreementModal({ offerAmount, onAccept, onClose }) {
+  const [checked, setChecked] = useState(false);
+
+  return (
+    <motion.div
+      initial={{ opacity: 0 }}
+      animate={{ opacity: 1 }}
+      exit={{ opacity: 0 }}
+      className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm"
+      onClick={onClose}
+    >
+      <motion.div
+        initial={{ scale: 0.95, opacity: 0 }}
+        animate={{ scale: 1, opacity: 1 }}
+        exit={{ scale: 0.95, opacity: 0 }}
+        transition={{ duration: 0.2 }}
+        className="bg-white rounded-xl shadow-xl max-w-lg w-full max-h-[80vh] overflow-y-auto"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <div className="p-6 border-b border-gray-100 flex items-center justify-between">
+          <h3 className="text-lg font-bold text-gray-900">Financing Agreement</h3>
+          <button onClick={onClose} className="text-gray-400 hover:text-gray-600">
+            <X className="w-5 h-5" />
+          </button>
+        </div>
+
+        <div className="p-6 space-y-4 text-sm text-gray-700">
+          <p>
+            By accepting this offer, you agree to assign your receivables to <strong>OUT&amp;IN</strong>
+            under the laws of Malaysia, including the <strong>Civil Law Act 1956</strong>.
+          </p>
+
+          <div className="bg-gray-50 rounded-lg p-4 space-y-2 text-sm">
+            <div className="flex justify-between">
+              <span className="text-gray-500">Net Disbursement</span>
+              <span className="font-bold text-gray-900">RM {Number(offerAmount || 0).toLocaleString()}</span>
+            </div>
+            <p className="text-xs text-gray-500">
+              The repayment obligation is transferred to OUT&IN upon disbursement.
+            </p>
+          </div>
+
+          <label className="flex items-start gap-3 cursor-pointer group">
+            <input
+              type="checkbox"
+              checked={checked}
+              onChange={(e) => setChecked(e.target.checked)}
+              className="mt-0.5 w-4 h-4 rounded border-gray-300 text-tng-blue focus:ring-tng-blue"
+            />
+            <span className="text-sm text-gray-600 group-hover:text-gray-800 transition-colors">
+              I have read and agree to the <strong>Terms of Financing</strong> and
+              confirm that the invoice details are accurate.
+            </span>
+          </label>
+        </div>
+
+        <div className="p-6 border-t border-gray-100 flex gap-3">
+          <button
+            onClick={onClose}
+            className="flex-1 px-4 py-2.5 border border-gray-200 text-gray-700 rounded-lg text-sm font-medium hover:bg-gray-50 transition-colors"
+          >
+            Cancel
+          </button>
+          <button
+            onClick={onAccept}
+            disabled={!checked}
+            className="flex-1 flex items-center justify-center gap-2 px-4 py-2.5 bg-tng-blue text-white rounded-lg text-sm font-bold hover:bg-tng-blue-dark transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+          >
+            <Banknote className="w-4 h-4" />
+            Accept &amp; Disburse
+          </button>
+        </div>
+      </motion.div>
+    </motion.div>
+  );
+}
 
 // ============================================================================
 // State machine constants
