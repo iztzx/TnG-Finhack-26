@@ -77,6 +77,17 @@ const Landing = () => {
           <div className="flex items-center gap-2"><span className="h-1.5 w-1.5 rounded-full bg-[#0EA5E9]" /> Partner Location APIs</div>
           <div className="flex items-center gap-2"><span className="h-1.5 w-1.5 rounded-full bg-[#ED2E38]" /> DuitNow</div>
         </div>
+
+        <footer className="mt-16 w-full border-t border-white/8 pt-6 pb-4 text-center">
+          <p className="text-[12px] text-white/25">&copy; 2026 PantasFlow by TnG Digital. All rights reserved.</p>
+          <div className="mt-2 flex items-center justify-center gap-4 text-[11px] text-white/30">
+            <span>Privacy Policy</span>
+            <span>|</span>
+            <span>Terms of Service</span>
+            <span>|</span>
+            <span>BNM Compliant</span>
+          </div>
+        </footer>
       </div>
     </div>
   );

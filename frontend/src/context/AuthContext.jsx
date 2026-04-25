@@ -1,128 +1,147 @@
-import React, { createContext, useState, useEffect, useContext } from 'react';
-import { signIn, signUp, signOut, getCurrentUser } from 'aws-amplify/auth';
-import { get, post } from 'aws-amplify/api';
-import awsconfig from '../aws-exports';
+import React, { createContext, useState, useEffect, useCallback, useContext, useRef } from 'react';
+import { api } from '../lib/api';
 
 export const AuthContext = createContext();
 
 export const useAuth = () => useContext(AuthContext);
+
+const TOKEN_KEY = 'pf_token';
+const USER_KEY = 'pf_user';
 
 export const AuthProvider = ({ children }) => {
   const [user, setUser] = useState(null);
   const [userProfile, setUserProfile] = useState(null);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState(null);
-
-  // Check if we are running the local mock without real AWS backend
-  const isDemoMode = awsconfig.aws_user_pools_id === 'ap-southeast-1_XXXXX';
+  const expiryTimerRef = useRef(null);
 
   const clearError = () => setError(null);
 
   const isAdmin = userProfile?.role === 'admin';
 
-  const fetchProfile = async (userId) => {
-    if (isDemoMode) return { role: 'user', email: 'demo@pantasflow.com' };
-    
+  // ---- Token helpers ----
+  const getToken = () => localStorage.getItem(TOKEN_KEY);
+
+  const setSession = (token, profile) => {
+    localStorage.setItem(TOKEN_KEY, token);
+    localStorage.setItem(USER_KEY, JSON.stringify(profile));
+    setUser({ userId: profile.userId || profile.email, username: profile.email });
+    setUserProfile(profile);
+    scheduleExpiryWarning(token);
+  };
+
+  const clearSession = () => {
+    localStorage.removeItem(TOKEN_KEY);
+    localStorage.removeItem(USER_KEY);
+    setUser(null);
+    setUserProfile(null);
+    if (expiryTimerRef.current) clearTimeout(expiryTimerRef.current);
+  };
+
+  // ---- JWT decode helper ----
+  const parseJwt = (token) => {
     try {
-      const restOperation = get({ 
-        apiName: 'PantasFlowAPI', 
-        path: `/users/${userId}` 
-      });
-      const { body } = await restOperation.response;
-      const data = await body.json();
-      return data;
-    } catch (err) {
-      console.error('[PantasFlow Auth] Failed to fetch profile', err);
+      const base64Url = token.split('.')[1];
+      const base64 = base64Url.replace(/-/g, '+').replace(/_/g, '/');
+      const jsonPayload = decodeURIComponent(
+        atob(base64)
+          .split('')
+          .map((c) => '%' + ('00' + c.charCodeAt(0).toString(16)).slice(-2))
+          .join('')
+      );
+      return JSON.parse(jsonPayload);
+    } catch {
       return null;
     }
   };
 
-  const checkSession = async () => {
-    setIsLoading(true);
-    try {
-      if (isDemoMode) {
-        // Mock session check
-        const demoUser = localStorage.getItem('demoUser');
-        if (demoUser) {
-          const parsed = JSON.parse(demoUser);
-          setUser(parsed.user);
-          setUserProfile(parsed.profile);
-        }
-        setIsLoading(false);
-        return;
+  // ---- Session expiry management ----
+  const scheduleExpiryWarning = (token) => {
+    if (expiryTimerRef.current) clearTimeout(expiryTimerRef.current);
+    const decoded = parseJwt(token);
+    if (!decoded?.exp) return;
+    const expiresAt = decoded.exp * 1000;
+    const warnAt = expiresAt - 5 * 60 * 1000; // 5 min before expiry
+    const now = Date.now();
+    const delay = Math.max(warnAt - now, 0);
+    expiryTimerRef.current = setTimeout(() => {
+      const remaining = expiresAt - Date.now();
+      if (remaining <= 0) {
+        clearSession();
+        window.location.href = '/login?reason=expired';
       }
+    }, delay);
+  };
 
-      const currentUser = await getCurrentUser();
-      setUser(currentUser);
-      
-      const profile = await fetchProfile(currentUser.userId);
-      if (profile) {
+  // ---- Check existing session on mount ----
+  const checkSession = useCallback(async () => {
+    setIsLoading(true);
+    const token = getToken();
+    const storedUser = localStorage.getItem(USER_KEY);
+
+    if (!token) {
+      clearSession();
+      setIsLoading(false);
+      return;
+    }
+
+    // Quick check: is token expired?
+    const decoded = parseJwt(token);
+    if (decoded?.exp && decoded.exp * 1000 < Date.now()) {
+      clearSession();
+      setIsLoading(false);
+      return;
+    }
+
+    // Restore from localStorage immediately for fast render
+    if (storedUser) {
+      try {
+        const profile = JSON.parse(storedUser);
+        setUser({ userId: profile.userId || profile.email, username: profile.email });
         setUserProfile(profile);
+      } catch { /* ignore */ }
+    }
+
+    // Validate with backend
+    try {
+      const response = await api.get('/api/auth/me', {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      const profile = response.data?.profile;
+      if (profile) {
+        localStorage.setItem(USER_KEY, JSON.stringify(profile));
+        setUserProfile(profile);
+        scheduleExpiryWarning(token);
       }
     } catch (err) {
-      // User is not signed in
-      setUser(null);
-      setUserProfile(null);
+      if (err.response?.status === 401) {
+        clearSession();
+      }
     } finally {
       setIsLoading(false);
     }
-  };
+  }, []);
 
   useEffect(() => {
     checkSession();
-  }, []);
+  }, [checkSession]);
 
+  // ---- Login ----
   const login = async (email, password) => {
     clearError();
     setIsLoading(true);
     try {
-      if (isDemoMode) {
-        // DEMO MODE LOGIN
-        return new Promise((resolve, reject) => {
-          setTimeout(() => {
-            if (password === 'wrong') {
-              setError("Incorrect password. Please try again.");
-              setIsLoading(false);
-              reject(new Error("Incorrect password"));
-              return;
-            }
-            
-            const isAdm = email === 'admin@pantasflow.com';
-            const mockUser = { userId: isAdm ? 'admin-123' : 'user-123', username: email };
-            const mockProfile = { role: isAdm ? 'admin' : 'user', email };
-            
-            setUser(mockUser);
-            setUserProfile(mockProfile);
-            localStorage.setItem('demoUser', JSON.stringify({ user: mockUser, profile: mockProfile }));
-            setIsLoading(false);
-            resolve(mockProfile.role);
-          }, 1000);
-        });
-      }
-
-      const { isSignedIn } = await signIn({ username: email, password });
-      
-      if (isSignedIn) {
-        const currentUser = await getCurrentUser();
-        setUser(currentUser);
-        
-        let profile = null;
-        if (email === 'admin@pantasflow.com') {
-          profile = { role: 'admin', email: 'admin@pantasflow.com', userId: currentUser.userId };
-          setUserProfile(profile);
-        } else {
-          profile = await fetchProfile(currentUser.userId);
-          setUserProfile(profile);
-        }
-        
-        return profile?.role || 'user';
-      }
+      const response = await api.post('/api/auth/login', { email, password });
+      const { token, profile } = response.data;
+      setSession(token, profile);
+      return profile?.role || 'user';
     } catch (err) {
-      console.error('[PantasFlow Auth]', err);
-      let message = "Something went wrong. Please try again.";
-      if (err.name === 'UserNotFoundException') message = "No account found with this email address.";
-      if (err.name === 'NotAuthorizedException') message = "Incorrect password. Please try again.";
-      if (err.name === 'UserNotConfirmedException') message = "Please verify your email before signing in.";
+      const status = err.response?.status;
+      let message = 'Something went wrong. Please try again.';
+      if (status === 401) message = 'Invalid email or password.';
+      if (status === 429) message = 'Too many attempts. Please wait and try again.';
+      if (status === 400) message = err.response?.data?.error || 'Invalid request.';
+      if (!err.response) message = 'Network error. Please check your connection.';
       setError(message);
       throw err;
     } finally {
@@ -130,77 +149,28 @@ export const AuthProvider = ({ children }) => {
     }
   };
 
+  // ---- Register ----
   const register = async (formData) => {
     clearError();
     setIsLoading(true);
     try {
-      const { email, password, phone_number, companyName, registrationNo, businessType } = formData;
-      
-      if (isDemoMode) {
-        // DEMO MODE REGISTER
-        return new Promise((resolve) => {
-          setTimeout(() => {
-            const newProfile = {
-              userId: 'demo-new-user-123',
-              email, companyName, registrationNo,
-              phoneNumber: phone_number, businessType,
-              role: 'user', riskTier: 'tier2', kycStatus: 'pending',
-              createdAt: new Date().toISOString(), updatedAt: new Date().toISOString()
-            };
-            const mockUser = { userId: newProfile.userId, username: email };
-            
-            setUser(mockUser);
-            setUserProfile(newProfile);
-            localStorage.setItem('demoUser', JSON.stringify({ user: mockUser, profile: newProfile }));
-            setIsLoading(false);
-            resolve(newProfile);
-          }, 1500);
-        });
-      }
-
-      const { userId } = await signUp({
-        username: email,
-        password,
-        options: {
-          userAttributes: {
-            email,
-            phone_number
-          }
-        }
-      });
-
-      const newProfile = {
-        userId,
-        email,
-        companyName,
-        registrationNo,
-        phoneNumber: phone_number,
-        businessType,
-        role: 'user',
-        riskTier: 'tier2',
-        kycStatus: 'pending',
-        createdAt: new Date().toISOString(),
-        updatedAt: new Date().toISOString()
-      };
-
-      const restOperation = post({
-        apiName: 'PantasFlowAPI',
-        path: '/users',
-        options: { body: newProfile }
-      });
-      await restOperation.response;
-      
-      await signIn({ username: email, password });
-      const currentUser = await getCurrentUser();
-      setUser(currentUser);
-      setUserProfile(newProfile);
-      
-      return newProfile;
+      const response = await api.post('/api/auth/register', formData);
+      const { token, profile } = response.data;
+      setSession(token, profile);
+      return profile;
     } catch (err) {
-      console.error('[PantasFlow Auth]', err);
-      let message = "Something went wrong. Please try again.";
-      if (err.name === 'UsernameExistsException') message = "An account with this email already exists. Please sign in instead.";
-      if (err.name === 'InvalidPasswordException') message = "Password must be at least 8 characters and include uppercase, lowercase, a number, and a special character.";
+      const status = err.response?.status;
+      let message = 'Something went wrong. Please try again.';
+      if (status === 409) message = 'An account with this email already exists.';
+      if (status === 400) {
+        const details = err.response?.data?.details;
+        if (Array.isArray(details)) {
+          message = details.map(d => d.message).join('. ');
+        } else {
+          message = err.response?.data?.error || 'Validation failed.';
+        }
+      }
+      if (!err.response) message = 'Network error. Please check your connection.';
       setError(message);
       throw err;
     } finally {
@@ -208,41 +178,36 @@ export const AuthProvider = ({ children }) => {
     }
   };
 
-  const logout = async () => {
-    setIsLoading(true);
-    try {
-      if (isDemoMode) {
-        localStorage.removeItem('demoUser');
-        setUser(null);
-        setUserProfile(null);
-        setIsLoading(false);
-        return;
-      }
-      
-      await signOut();
-      localStorage.clear();
-      sessionStorage.clear();
-      setUser(null);
-      setUserProfile(null);
-    } catch (err) {
-      console.error('[PantasFlow Auth]', err);
-    } finally {
-      setIsLoading(false);
-    }
+  // ---- Logout ----
+  const logout = useCallback(() => {
+    clearSession();
+  }, []);
+
+  // ---- Update profile (local) ----
+  const updateProfile = (updates) => {
+    setUserProfile((prev) => {
+      const updated = { ...prev, ...updates };
+      localStorage.setItem(USER_KEY, JSON.stringify(updated));
+      return updated;
+    });
   };
 
   return (
-    <AuthContext.Provider value={{
-      user,
-      userProfile,
-      isLoading,
-      isAdmin,
-      login,
-      register,
-      logout,
-      error,
-      clearError
-    }}>
+    <AuthContext.Provider
+      value={{
+        user,
+        userProfile,
+        isLoading,
+        isAdmin,
+        login,
+        register,
+        logout,
+        error,
+        clearError,
+        updateProfile,
+        getToken,
+      }}
+    >
       {children}
     </AuthContext.Provider>
   );

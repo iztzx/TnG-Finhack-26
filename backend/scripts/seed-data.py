@@ -23,6 +23,7 @@ import sys
 from datetime import datetime, timedelta, timezone
 from decimal import Decimal
 
+import bcrypt
 import boto3
 from botocore.exceptions import BotoCoreError, ClientError
 
@@ -43,8 +44,55 @@ def iso_utc(dt: datetime) -> str:
     return dt.astimezone(timezone.utc).replace(microsecond=0).isoformat().replace("+00:00", "Z")
 
 
+DEMO_USER_PASSWORD = os.getenv("SEED_USER_PASSWORD", "demo123")
+DEMO_ADMIN_PASSWORD = os.getenv("SEED_ADMIN_PASSWORD", "admin123")
+
+
+def hash_password(plain: str) -> str:
+    """Hash a password with bcrypt (12 rounds)."""
+    return bcrypt.hashpw(plain.encode("utf-8"), bcrypt.gensalt(rounds=12)).decode("utf-8")
+
+
 def build_users(now: datetime) -> list[dict]:
+    user_hash = hash_password(DEMO_USER_PASSWORD)
+    admin_hash = hash_password(DEMO_ADMIN_PASSWORD)
     return [
+        {
+            "id": "user@pantasflow.com",
+            "userId": "demo-user-001",
+            "companyName": "Nusantara Cross-Border Logistics Sdn. Bhd.",
+            "registrationNo": "202201184392",
+            "businessType": "Logistics",
+            "email": "user@pantasflow.com",
+            "phoneNumber": "+60-3-6412 8801",
+            "passwordHash": user_hash,
+            "role": "user",
+            "riskTier": "LOW",
+            "kycStatus": "VERIFIED",
+            "walletBalance": Decimal("318450.75"),
+            "creditLimit": Decimal("500000.00"),
+            "lastLoginAt": "",
+            "createdAt": iso_utc(now - timedelta(days=320)),
+            "updatedAt": iso_utc(now),
+        },
+        {
+            "id": "admin@pantasflow.com",
+            "userId": "demo-admin-001",
+            "companyName": "TNG Supply Chain Capital (Admin)",
+            "registrationNo": "202301015678",
+            "businessType": "Financial Services",
+            "email": "admin@pantasflow.com",
+            "phoneNumber": "+60-3-8888 0001",
+            "passwordHash": admin_hash,
+            "role": "admin",
+            "riskTier": "LOW",
+            "kycStatus": "VERIFIED",
+            "walletBalance": Decimal("0"),
+            "creditLimit": Decimal("0"),
+            "lastLoginAt": "",
+            "createdAt": iso_utc(now - timedelta(days=365)),
+            "updatedAt": iso_utc(now),
+        },
         {
             "id": "sme-nusantara-logistics",
             "companyName": "Nusantara Cross-Border Logistics Sdn. Bhd.",

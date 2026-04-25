@@ -16,10 +16,10 @@ import {
 } from 'lucide-react';
 import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
 import KPICard from '../components/KPICard';
-import { getAnalytics } from '../lib/api';
+import { getDashboardData } from '../lib/api';
 import { useAuth } from '../context/AuthContext';
 
-const mockCashFlow = [
+const defaultCashFlow = [
   { month: 'Nov', inflow: 45000, outflow: 12000 },
   { month: 'Dec', inflow: 62000, outflow: 18000 },
   { month: 'Jan', inflow: 38000, outflow: 15000 },
@@ -28,7 +28,15 @@ const mockCashFlow = [
   { month: 'Apr', inflow: 97000, outflow: 31000 },
 ];
 
-const mockActivities = [
+const activityIconMap = {
+  FUNDED: { icon: Banknote, color: 'bg-green-50 text-green-600' },
+  REPAID: { icon: Shield, color: 'bg-purple-50 text-purple-600' },
+  OFFER_MADE: { icon: Zap, color: 'bg-tng-blue/10 text-tng-blue' },
+  ANALYZED: { icon: Activity, color: 'bg-amber-50 text-amber-600' },
+  PENDING_REVIEW: { icon: FileText, color: 'bg-blue-50 text-blue-600' },
+};
+
+const defaultActivities = [
   { id: 'ACT-001', title: 'Invoice submitted for financing', detail: 'INV-98234 | Syarikat ABC Sdn Bhd | RM 15,000', time: '2 min ago', icon: FileText, color: 'bg-blue-50 text-blue-600' },
   { id: 'ACT-002', title: 'Funds disbursed to your wallet', detail: 'TXN-44512 | RM 23,000 released to your business', time: '15 min ago', icon: Banknote, color: 'bg-green-50 text-green-600' },
   { id: 'ACT-003', title: 'Shipment cleared customs', detail: 'SHP-7781 | Port Klang to Singapore Port', time: '1 hr ago', icon: Truck, color: 'bg-amber-50 text-amber-600' },
@@ -49,6 +57,8 @@ export default function Dashboard() {
   const [activeShipments] = useState(4);
   const [complianceScore] = useState(98);
   const [isLoadingKpis, setIsLoadingKpis] = useState(true);
+  const [cashFlowData, setCashFlowData] = useState(defaultCashFlow);
+  const [activities, setActivities] = useState(defaultActivities);
   const quickStats = [
     { label: 'Active shipments', value: activeShipments, icon: Truck, tone: 'bg-blue-50 text-blue-600', action: () => navigate('/shipments') },
     { label: 'Partner feed health', value: 'All online', icon: Activity, tone: 'bg-violet-50 text-violet-600', action: () => navigate('/architecture') },
@@ -58,18 +68,43 @@ export default function Dashboard() {
 
   const userName = userProfile?.companyName?.split(' ')[0] || userProfile?.email?.split('@')[0] || 'User';
 
+  const getGreeting = () => {
+    const hour = new Date().getHours();
+    if (hour < 12) return 'Good morning';
+    if (hour < 18) return 'Good afternoon';
+    return 'Good evening';
+  };
+
   useEffect(() => {
     async function load() {
       setIsLoadingKpis(true);
       try {
-        const analytics = await getAnalytics();
-        if (analytics) {
+        const dashboard = await getDashboardData();
+        if (dashboard) {
           setKpis({
-            totalFinanced: analytics.totalFinanced || 368000,
-            activeInvoices: analytics.activeInvoices || 3,
-            avgFactoringRate: (analytics.avgFactoringRate || 0.028) * 100,
-            repaymentRate: analytics.totalFinanced > 0 ? ((analytics.totalRepaid || 0) / (analytics.totalFinanced || 1)) * 100 : 96.5,
+            totalFinanced: dashboard.totalFinanced || 368000,
+            activeInvoices: dashboard.activeInvoices || 3,
+            avgFactoringRate: (dashboard.avgFactoringRate || 0.028) * 100,
+            repaymentRate: dashboard.totalFinanced > 0 ? ((dashboard.totalRepaid || 0) / (dashboard.totalFinanced || 1)) * 100 : 96.5,
           });
+
+          // Use real cash flow data if available
+          if (dashboard.cashFlow && dashboard.cashFlow.length > 0) {
+            setCashFlowData(dashboard.cashFlow);
+          } else if (dashboard.cashFlowSummary && dashboard.cashFlowSummary.length > 0) {
+            setCashFlowData(dashboard.cashFlowSummary.map((item) => {
+              const monthLabel = new Date(item.month + '-01').toLocaleString('en-US', { month: 'short' });
+              return { month: monthLabel, inflow: item.disbursements || 0, outflow: Math.round((item.disbursements || 0) * 0.3) };
+            }));
+          }
+
+          // Use real activity data if available
+          if (dashboard.activities && dashboard.activities.length > 0) {
+            setActivities(dashboard.activities.map((act) => {
+              const mapping = activityIconMap[act.status] || { icon: FileText, color: 'bg-blue-50 text-blue-600' };
+              return { ...act, icon: mapping.icon, color: mapping.color };
+            }));
+          }
         }
       } catch {
         // keep defaults
@@ -90,7 +125,7 @@ export default function Dashboard() {
                 <CircleCheck className="h-3.5 w-3.5" />
                 Funding overview
               </span>
-              <h1 className="mt-3 text-2xl font-semibold tracking-tight sm:text-3xl">Welcome back, {userName}</h1>
+              <h1 className="mt-3 text-2xl font-semibold tracking-tight sm:text-3xl">{getGreeting()}, {userName}</h1>
               <p className="mt-2 max-w-xl text-sm leading-6 text-white/78">
                 See what has been advanced to your business, what is pending next, and where to act without digging through multiple tabs.
               </p>
@@ -223,7 +258,7 @@ export default function Dashboard() {
             <span className="rounded-full bg-slate-100 px-3 py-1 text-xs font-medium text-slate-600">Last 6 months</span>
           </div>
           <ResponsiveContainer width="100%" height={280}>
-            <AreaChart data={mockCashFlow} margin={{ top: 5, right: 5, left: 0, bottom: 5 }}>
+            <AreaChart data={cashFlowData} margin={{ top: 5, right: 5, left: 0, bottom: 5 }}>
               <defs>
                 <linearGradient id="inflowGrad" x1="0" y1="0" x2="0" y2="1">
                   <stop offset="5%" stopColor="#005ABB" stopOpacity={0.2} />
@@ -281,7 +316,7 @@ export default function Dashboard() {
           </button>
         </div>
         <div className="grid gap-3 lg:grid-cols-2">
-          {mockActivities.map((act) => (
+          {activities.map((act) => (
             <button key={act.id} onClick={() => navigate(act.icon === Truck ? '/shipments' : '/transactions')} className="flex items-start gap-4 rounded-3xl border border-slate-100 bg-slate-50/70 p-4 text-left transition-colors hover:bg-slate-50">
               <div className={`mt-0.5 rounded-2xl p-3 ${act.color}`}>
                 <act.icon className="h-4 w-4" />

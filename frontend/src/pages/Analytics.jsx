@@ -4,9 +4,9 @@ import {
   PieChart, Pie, Cell, BarChart, Bar, Legend
 } from 'recharts';
 import { Activity, Brain, TrendingUp, Wallet, BarChart3 } from 'lucide-react';
-import { getAnalytics } from '../lib/api';
+import { getAnalytics, listInvoices } from '../lib/api';
 
-const mockCashFlow = [
+const defaultCashFlow = [
   { month: 'Nov', inflows: 45000, outflows: 12000 },
   { month: 'Dec', inflows: 62000, outflows: 18000 },
   { month: 'Jan', inflows: 38000, outflows: 15000 },
@@ -15,13 +15,13 @@ const mockCashFlow = [
   { month: 'Apr', inflows: 97000, outflows: 31000 },
 ];
 
-const mockPortfolioRisk = [
+const defaultPortfolioRisk = [
   { name: 'Low Risk', value: 45, color: '#22c55e' },
   { name: 'Medium Risk', value: 35, color: '#eab308' },
   { name: 'High Risk', value: 20, color: '#ef4444' },
 ];
 
-const mockFeatureImportance = [
+const defaultFeatureImportance = [
   { feature: 'Payment Consistency', importance: 0.32 },
   { feature: 'Business Tenure', importance: 0.24 },
   { feature: 'Invoice Amount', importance: 0.18 },
@@ -30,7 +30,7 @@ const mockFeatureImportance = [
   { feature: 'Industry Sector', importance: 0.04 },
 ];
 
-const mockPaymentPatterns = [
+const defaultPaymentPatterns = [
   { month: 'Nov', onTime: 8, late: 1 },
   { month: 'Dec', onTime: 10, late: 2 },
   { month: 'Jan', onTime: 7, late: 1 },
@@ -43,14 +43,71 @@ export default function Analytics() {
   const [utilization, setUtilization] = useState(42);
   const [totalFinanced, setTotalFinanced] = useState(368000);
   const [creditLimit] = useState(875000);
+  const [onTimeRate, setOnTimeRate] = useState(94.2);
+  const [cashFlowData, setCashFlowData] = useState(defaultCashFlow);
+  const [portfolioRisk, setPortfolioRisk] = useState(defaultPortfolioRisk);
+  const [featureImportance] = useState(defaultFeatureImportance);
+  const [paymentPatterns, setPaymentPatterns] = useState(defaultPaymentPatterns);
 
   useEffect(() => {
     async function load() {
       try {
-        const data = await getAnalytics();
+        const [analytics, invoicesData] = await Promise.allSettled([
+          getAnalytics(),
+          listInvoices(),
+        ]);
+
+        const data = analytics.status === 'fulfilled' ? analytics.value : null;
+        const invData = invoicesData.status === 'fulfilled' ? invoicesData.value : null;
+
         if (data) {
           setUtilization(Math.round((data.utilizationRate || 0.42) * 100));
           setTotalFinanced(data.totalFinanced || 368000);
+
+          // Build cash flow from API summary data
+          if (data.cashFlowSummary?.length > 0) {
+            setCashFlowData(data.cashFlowSummary.map((item) => {
+              const monthLabel = new Date(item.month + '-01').toLocaleString('en-US', { month: 'short' });
+              return {
+                month: monthLabel,
+                inflows: item.disbursements || 0,
+                outflows: Math.round((item.disbursements || 0) * 0.32),
+              };
+            }));
+          }
+        }
+
+        // Derive portfolio risk and payment patterns from real invoices
+        if (invData?.invoices?.length > 0) {
+          const invoices = invData.invoices;
+          const funded = invoices.filter((i) => i.status === 'FUNDED');
+          const repaid = invoices.filter((i) => i.status === 'REPAID');
+          const pending = invoices.filter((i) => i.status === 'PENDING_REVIEW' || i.status === 'ANALYZED' || i.status === 'OFFER_MADE');
+
+          const total = invoices.length || 1;
+          setPortfolioRisk([
+            { name: 'Low Risk', value: Math.round(((repaid.length + funded.length) / total) * 100), color: '#22c55e' },
+            { name: 'Medium Risk', value: Math.round((pending.length / total) * 100), color: '#eab308' },
+            { name: 'High Risk', value: Math.max(0, 100 - Math.round(((repaid.length + funded.length + pending.length) / total) * 100)), color: '#ef4444' },
+          ]);
+
+          // Derive on-time rate
+          if (repaid.length + funded.length > 0) {
+            setOnTimeRate(Math.round((repaid.length / (repaid.length + funded.length)) * 100 * 10) / 10 || 94.2);
+          }
+
+          // Build payment patterns from invoice dates
+          const patternMap = {};
+          invoices.forEach((inv) => {
+            const d = inv.invoiceDate || inv.dueDate;
+            if (!d) return;
+            const month = new Date(d).toLocaleString('en-US', { month: 'short' });
+            if (!patternMap[month]) patternMap[month] = { month, onTime: 0, late: 0 };
+            if (inv.status === 'REPAID') patternMap[month].onTime += 1;
+            else if (inv.status === 'FUNDED') patternMap[month].late += 1;
+          });
+          const patterns = Object.values(patternMap);
+          if (patterns.length > 0) setPaymentPatterns(patterns);
         }
       } catch {
         // keep defaults
@@ -71,7 +128,7 @@ export default function Analytics() {
         {[
           { label: 'Total Financed', value: `RM ${(totalFinanced / 1000).toFixed(0)}k`, icon: Wallet, color: 'text-tng-blue' },
           { label: 'Credit Utilization', value: `${utilization}%`, icon: Activity, color: 'text-purple-600' },
-          { label: 'On-Time Repayment', value: '94.2%', icon: TrendingUp, color: 'text-green-600' },
+          { label: 'On-Time Repayment', value: `${onTimeRate}%`, icon: TrendingUp, color: 'text-green-600' },
         ].map((stat) => (
           <div key={stat.label} className="bg-white rounded-xl p-5 shadow-sm border border-gray-100 flex items-center gap-4">
             <stat.icon className={`w-8 h-8 ${stat.color}`} />
@@ -91,7 +148,7 @@ export default function Analytics() {
             <h2 className="text-lg font-semibold text-gray-900">Cash Flow Dashboard</h2>
           </div>
           <ResponsiveContainer width="100%" height={280}>
-            <AreaChart data={mockCashFlow} margin={{ top: 5, right: 5, left: 0, bottom: 5 }}>
+            <AreaChart data={cashFlowData} margin={{ top: 5, right: 5, left: 0, bottom: 5 }}>
               <defs>
                 <linearGradient id="inflowGrad2" x1="0" y1="0" x2="0" y2="1">
                   <stop offset="5%" stopColor="#005ABB" stopOpacity={0.2} />
@@ -166,7 +223,7 @@ export default function Analytics() {
             <ResponsiveContainer width="100%" height="100%">
               <PieChart>
                 <Pie
-                  data={mockPortfolioRisk}
+                  data={portfolioRisk}
                   cx="50%"
                   cy="50%"
                   innerRadius={60}
@@ -174,7 +231,7 @@ export default function Analytics() {
                   paddingAngle={4}
                   dataKey="value"
                 >
-                  {mockPortfolioRisk.map((entry, index) => (
+                  {portfolioRisk.map((entry, index) => (
                     <Cell key={`cell-${index}`} fill={entry.color} />
                   ))}
                 </Pie>
@@ -192,7 +249,7 @@ export default function Analytics() {
             <h2 className="text-lg font-semibold text-gray-900">Credit Decision Factors</h2>
           </div>
           <div className="space-y-4">
-            {mockFeatureImportance.map((f) => (
+            {featureImportance.map((f) => (
               <div key={f.feature}>
                 <div className="flex items-center justify-between text-sm mb-1">
                   <span className="text-gray-700 font-medium">{f.feature}</span>
@@ -217,7 +274,7 @@ export default function Analytics() {
           <h2 className="text-lg font-semibold text-gray-900">Payment Patterns</h2>
         </div>
         <ResponsiveContainer width="100%" height={260}>
-          <BarChart data={mockPaymentPatterns} margin={{ top: 5, right: 5, left: 0, bottom: 5 }}>
+          <BarChart data={paymentPatterns} margin={{ top: 5, right: 5, left: 0, bottom: 5 }}>
             <CartesianGrid strokeDasharray="3 3" stroke="#f3f4f6" />
             <XAxis dataKey="month" tick={{ fontSize: 12 }} />
             <YAxis tick={{ fontSize: 12 }} />

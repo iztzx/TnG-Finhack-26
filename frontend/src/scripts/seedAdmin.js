@@ -10,8 +10,8 @@ const DYNAMODB_TABLE_NAME = process.env.DYNAMODB_TABLE_NAME || "PantasFlowUsers"
 const REGION = process.env.AWS_REGION || "ap-southeast-1";
 
 const adminUser = {
-  email: "admin@pantasflow.com",
-  password: "PantasFlow@Admin2025",
+  email: process.env.ADMIN_EMAIL || "admin@pantasflow.com",
+  password: process.env.ADMIN_PASSWORD || "CHANGE_ME_BEFORE_RUNNING",
   role: "admin"
 };
 

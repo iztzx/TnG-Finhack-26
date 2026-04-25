@@ -2,11 +2,12 @@ import React from 'react';
 import { BrowserRouter, Routes, Route, Navigate, Outlet } from 'react-router-dom';
 import ProtectedRoute from './components/auth/ProtectedRoute';
 import AdminRoute from './components/auth/AdminRoute';
+import Sidebar from './components/Sidebar';
+import AdminSidebar from './components/admin/AdminSidebar';
+import ToastContainer from './components/ToastContainer';
 import Landing from './pages/Landing';
 import Login from './pages/Login';
 import Register from './pages/Register';
-import Sidebar from './components/Sidebar';
-import AdminSidebar from './components/admin/AdminSidebar';
 import Dashboard from './pages/Dashboard';
 import Financing from './pages/Financing';
 import Shipments from './pages/Shipments';
@@ -15,6 +16,7 @@ import ComplianceHub from './pages/ComplianceHub';
 import Analytics from './pages/Analytics';
 import ArchitectureDiagram from './pages/ArchitectureDiagram';
 import AIAssistant from './pages/AIAssistant';
+import Profile from './pages/Profile';
 import CommandCenter from './pages/admin/CommandCenter';
 
 const AppLayout = () => (
@@ -48,6 +50,7 @@ const AuditLog = () => <div className="p-6 text-white text-2xl font-bold">Audit 
 export default function App() {
   return (
     <BrowserRouter>
+      <ToastContainer />
       <Routes>
         <Route path="/" element={<Landing />} />
         <Route path="/login" element={<Login />} />
@@ -63,6 +66,7 @@ export default function App() {
             <Route path="/analytics" element={<Analytics />} />
             <Route path="/architecture" element={<ArchitectureDiagram />} />
             <Route path="/assistant" element={<AIAssistant />} />
+            <Route path="/profile" element={<Profile />} />
             <Route path="/" element={<Navigate to="/dashboard" replace />} />
           </Route>
         </Route>

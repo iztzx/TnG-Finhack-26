@@ -1,6 +1,7 @@
 import { useState, useRef, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Send, User, Bot, Sparkles } from 'lucide-react';
+import { queryAIAssistant } from '../lib/api';
 
 const smartResponses = {
   'what\'s my factoring rate': 'Based on your credit score of 780, your current rate is 3%. This includes a 2% base rate and 1% risk premium.',
@@ -18,12 +19,24 @@ const welcomeMessage = {
   text: "Hi! I'm your TnG financing assistant. I can help you understand fees, check eligibility, or explain your credit score. What would you like to know?",
 };
 
-function getResponse(input) {
+function getLocalResponse(input) {
   const lower = input.toLowerCase().trim();
   for (const [key, value] of Object.entries(smartResponses)) {
     if (lower.includes(key)) return value;
   }
-  return "I'll connect you with our team for that. In the meantime, try uploading an invoice to see your instant offer!";
+  return null;
+}
+
+async function getResponse(input, history) {
+  // Try backend AI first
+  try {
+    const result = await queryAIAssistant(input, history);
+    if (result?.reply) return result.reply;
+  } catch {
+    // fall through to local
+  }
+  // Fallback to local keyword matching
+  return getLocalResponse(input) || "I'll connect you with our team for that. In the meantime, try uploading an invoice to see your instant offer!";
 }
 
 export default function AIAssistant() {
@@ -36,18 +49,26 @@ export default function AIAssistant() {
     scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight, behavior: 'smooth' });
   }, [messages, typing]);
 
-  const handleSend = () => {
+  const handleSend = async () => {
     if (!input.trim()) return;
     const userMsg = { id: Date.now().toString(), role: 'user', text: input };
     setMessages((prev) => [...prev, userMsg]);
     setInput('');
     setTyping(true);
 
-    setTimeout(() => {
-      const reply = getResponse(userMsg.text);
+    // Build history for context
+    const history = messages
+      .filter((m) => m.id !== 'welcome')
+      .map((m) => ({ role: m.role, content: m.text }));
+
+    try {
+      const reply = await getResponse(userMsg.text, history);
       setMessages((prev) => [...prev, { id: (Date.now() + 1).toString(), role: 'assistant', text: reply }]);
+    } catch {
+      setMessages((prev) => [...prev, { id: (Date.now() + 1).toString(), role: 'assistant', text: "Sorry, I couldn't process that. Please try again." }]);
+    } finally {
       setTyping(false);
-    }, 800 + Math.random() * 600);
+    }
   };
 
   const handleKeyDown = (e) => {

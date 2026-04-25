@@ -25,8 +25,8 @@ Parameters:
     Description: Optional dedicated Model Studio API key for PDF extraction. Leave blank to reuse DashScopeApiKey.
   DashScopeDocBaseUrl:
     Type: String
-    Default: 'https://dashscope.aliyuncs.com/compatible-mode/v1'
-    Description: OpenAI-compatible base URL for document extraction. Qwen-Doc-Turbo currently uses the China endpoint.
+    Default: 'https://cn-hongkong.dashscope.aliyuncs.com/compatible-mode/v1'
+    Description: OpenAI-compatible base URL for document extraction. Hong Kong endpoint recommended for Malaysia deployment (ap-southeast-3).
   DashScopeDocModel:
     Type: String
     Default: 'qwen-doc-turbo'

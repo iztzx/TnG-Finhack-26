@@ -1,7 +1,9 @@
+import { useState, useEffect } from 'react';
 import { GitBranch, Server, BookOpen, ClipboardList } from 'lucide-react';
 import ComplianceBadge from '../components/ComplianceBadge';
+import { getAuditTrail } from '../lib/api';
 
-const auditTrail = [
+const defaultAuditTrail = [
   { id: 'AUD-001', action: 'User login', user: 'admin@tng.com', timestamp: '2026-04-24 14:30:00', severity: 'Info' },
   { id: 'AUD-002', action: 'Invoice uploaded for financing', user: 'system', timestamp: '2026-04-24 14:28:15', severity: 'Info' },
   { id: 'AUD-003', action: 'Credit score updated via ML model', user: 'system', timestamp: '2026-04-24 14:28:16', severity: 'Info' },
@@ -19,6 +21,22 @@ const regulations = [
 ];
 
 export default function ComplianceHub() {
+  const [auditTrail, setAuditTrail] = useState(defaultAuditTrail);
+
+  useEffect(() => {
+    async function load() {
+      try {
+        const data = await getAuditTrail();
+        if (data?.entries?.length > 0) {
+          setAuditTrail(data.entries);
+        }
+      } catch {
+        // keep defaults
+      }
+    }
+    load();
+  }, []);
+
   return (
     <div className="p-6 space-y-6">
       <div className="flex items-center justify-between">

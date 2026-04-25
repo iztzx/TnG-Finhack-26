@@ -1,12 +1,13 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
   Truck, Radio, CheckCircle, Clock, Package, ChevronRight, RefreshCw, Globe2, Satellite, MapPinned, ShieldCheck
 } from 'lucide-react';
 import { useWebSocket } from '../hooks/useWebSocket';
 import { WS_URL } from '../lib/constants';
+import { listShipments, trackShipment } from '../lib/api';
 
-const mockShipments = [
+const defaultShipments = [
   {
     id: 'SHP-7781',
     origin: 'Port Klang, Malaysia',
@@ -82,17 +83,55 @@ const statusConfig = {
 };
 
 export default function Shipments() {
-  const [selectedShipment, setSelectedShipment] = useState(mockShipments[0]);
-  const [shipments] = useState(mockShipments);
+  const [shipments, setShipments] = useState(defaultShipments);
+  const [selectedShipment, setSelectedShipment] = useState(defaultShipments[0]);
   const [refreshing, setRefreshing] = useState(false);
   const [refreshSuccess, setRefreshSuccess] = useState(false);
+  const [loading, setLoading] = useState(true);
   const { isConnected } = useWebSocket(WS_URL);
   const navigate = useNavigate();
+
+  // Fetch shipments from API on mount
+  useEffect(() => {
+    async function load() {
+      setLoading(true);
+      try {
+        const data = await listShipments();
+        if (data?.shipments?.length > 0) {
+          setShipments(data.shipments);
+          setSelectedShipment(data.shipments[0]);
+        }
+      } catch {
+        // keep defaults
+      } finally {
+        setLoading(false);
+      }
+    }
+    load();
+  }, []);
 
   const handleRefresh = async () => {
     setRefreshing(true);
     try {
-      await new Promise((r) => setTimeout(r, 800));
+      const data = await trackShipment(selectedShipment.id);
+      if (data) {
+        const updated = shipments.map((s) =>
+          s.id === selectedShipment.id
+            ? {
+                ...s,
+                status: data.status || s.status,
+                customsStatus: data.customsStatus || s.customsStatus,
+                eta: data.eta || s.eta,
+                waypoints: data.waypoints || s.waypoints,
+                currentLocation: data.currentLocation || s.currentLocation,
+              }
+            : s
+        );
+        setShipments(updated);
+        setSelectedShipment(updated.find((s) => s.id === selectedShipment.id) || updated[0]);
+      }
+    } catch {
+      // keep existing data
     } finally {
       setRefreshing(false);
       setRefreshSuccess(true);

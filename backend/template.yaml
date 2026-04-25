@@ -8,10 +8,15 @@ Parameters:
     Default: dev
     AllowedPattern: "^[a-z0-9-]+$"
     Description: Deployment environment suffix used for resource naming.
+  JwtSecret:
+    Type: String
+    NoEcho: true
+    Description: JWT signing secret for auth tokens. Set via --parameter-overrides or samconfig.toml.
+    MinLength: 16
 
 Globals:
   Function:
-    Runtime: python3.10
+    Runtime: python3.12
     Timeout: 30
     MemorySize: 256
 
@@ -157,6 +162,39 @@ Resources:
         - Key: Environment
           Value: !Ref Environment
 
+  InvoiceWebhookFunction:
+    Type: AWS::Serverless::Function
+    Description: Receives AI-extracted invoice payloads from Alibaba Cloud, validates via Pydantic, persists to DynamoDB, runs ML scoring, and generates a financing Offer.
+    Properties:
+      FunctionName: !Sub "tng-finhack-${Environment}-invoice-webhook"
+      Handler: handler.handler
+      CodeUri: lambda/invoice-webhook
+      Role: !GetAtt InvoiceWebhookFunctionRole.Arn
+      Environment:
+        Variables:
+          INVOICES_TABLE: !Ref InvoicesTable
+          OFFERS_TABLE: !Ref OffersTable
+          LOG_LEVEL: INFO
+          ML_MODEL_DIR: /opt/ml/models
+      Timeout: 30
+      MemorySize: 256
+      Events:
+        WebhookPost:
+          Type: Api
+          Properties:
+            Path: /api/webhook/invoice-parsed
+            Method: POST
+            RestApiId: !Ref TnGApiGateway
+
+  TnGApiGateway:
+    Type: AWS::Serverless::Api
+    Properties:
+      StageName: !Ref Environment
+      Cors:
+        AllowMethods: "'POST,GET,OPTIONS'"
+        AllowOrigin: "'*'"
+        AllowHeaders: "'Content-Type,X-Amz-Date,Authorization'"
+
   InvoiceWebhookFunctionRole:
     Type: AWS::IAM::Role
     Properties:
@@ -179,7 +217,74 @@ Resources:
                 Effect: Allow
                 Action:
                   - dynamodb:PutItem
+                  - dynamodb:UpdateItem
                 Resource: !GetAtt InvoicesTable.Arn
+              - Sid: PutFinancingOffers
+                Effect: Allow
+                Action:
+                  - dynamodb:PutItem
+                Resource: !GetAtt OffersTable.Arn
+
+  AuthFunction:
+    Type: AWS::Serverless::Function
+    Description: Handles user registration, login, and profile retrieval with bcrypt password hashing and JWT tokens.
+    Properties:
+      FunctionName: !Sub "tng-finhack-${Environment}-auth"
+      Handler: handler.handler
+      CodeUri: lambda/auth
+      Role: !GetAtt AuthFunctionRole.Arn
+      Environment:
+        Variables:
+          USERS_TABLE: !Ref UsersTable
+          JWT_SECRET: !Ref JwtSecret
+          LOG_LEVEL: INFO
+      Timeout: 30
+      MemorySize: 256
+      Events:
+        AuthRegister:
+          Type: Api
+          Properties:
+            Path: /api/auth/register
+            Method: POST
+            RestApiId: !Ref TnGApiGateway
+        AuthLogin:
+          Type: Api
+          Properties:
+            Path: /api/auth/login
+            Method: POST
+            RestApiId: !Ref TnGApiGateway
+        AuthMe:
+          Type: Api
+          Properties:
+            Path: /api/auth/me
+            Method: GET
+            RestApiId: !Ref TnGApiGateway
+
+  AuthFunctionRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: !Sub "tng-finhack-${Environment}-auth-role"
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: lambda.amazonaws.com
+            Action: sts:AssumeRole
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole
+      Policies:
+        - PolicyName: AuthDynamoAccessPolicy
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              - Sid: ReadWriteUsers
+                Effect: Allow
+                Action:
+                  - dynamodb:GetItem
+                  - dynamodb:PutItem
+                  - dynamodb:UpdateItem
+                Resource: !GetAtt UsersTable.Arn
 
   ScoringFunctionRole:
     Type: AWS::IAM::Role
@@ -216,6 +321,32 @@ Resources:
                 Resource:
                   - !GetAtt OffersTable.Arn
                   - !Sub "${OffersTable.Arn}/index/SmeIdIndex"
+
+  DisburseFunction:
+    Type: AWS::Serverless::Function
+    Description: Accepts a financing offer, performs idempotent disbursement with DuitNow mock, writes ledger, and updates wallet balance atomically.
+    Properties:
+      FunctionName: !Sub "tng-finhack-${Environment}-disburse"
+      Handler: handler.handler
+      CodeUri: lambda/disburse
+      Role: !GetAtt DisbursementFunctionRole.Arn
+      Environment:
+        Variables:
+          OFFERS_TABLE: !Ref OffersTable
+          USERS_TABLE: !Ref UsersTable
+          INVOICES_TABLE: !Ref InvoicesTable
+          TRANSACTIONS_TABLE: !Ref TransactionsTable
+          LOG_LEVEL: INFO
+          MOCK_PAYMENT_GATEWAY_DELAY: "1.5"
+      Timeout: 30
+      MemorySize: 256
+      Events:
+        DisbursePost:
+          Type: Api
+          Properties:
+            Path: /api/disburse
+            Method: POST
+            RestApiId: !Ref TnGApiGateway
 
   DisbursementFunctionRole:
     Type: AWS::IAM::Role
@@ -293,6 +424,18 @@ Outputs:
   InvoiceUploadsBucketName:
     Description: S3 bucket used for invoice uploads before OCR and underwriting.
     Value: !Ref InvoiceUploadsBucket
+
+  InvoiceWebhookApiUrl:
+    Description: URL for the Alibaba Cloud invoice webhook endpoint.
+    Value: !Sub "https://${TnGApiGateway}.execute-api.${AWS::Region}.amazonaws.com/${Environment}/api/webhook/invoice-parsed"
+
+  DisburseApiUrl:
+    Description: URL for the disbursement API endpoint.
+    Value: !Sub "https://${TnGApiGateway}.execute-api.${AWS::Region}.amazonaws.com/${Environment}/api/disburse"
+
+  AuthApiUrl:
+    Description: URL for the auth API endpoints (login, register, me).
+    Value: !Sub "https://${TnGApiGateway}.execute-api.${AWS::Region}.amazonaws.com/${Environment}/api/auth"
 
   UsersTableName:
     Description: DynamoDB table storing SME user profiles.

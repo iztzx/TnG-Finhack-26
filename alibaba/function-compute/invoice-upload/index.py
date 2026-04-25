@@ -24,9 +24,9 @@ IMAGE_MIME_TYPES = {
     "image/jpeg",
     "image/png",
 }
-REQUEST_TIMEOUT_SECONDS = 5
-FILE_PARSE_POLL_ATTEMPTS = 5
-FILE_PARSE_POLL_INTERVAL_SECONDS = 2
+REQUEST_TIMEOUT_SECONDS = 30
+FILE_PARSE_POLL_ATTEMPTS = 10
+FILE_PARSE_POLL_INTERVAL_SECONDS = 3
 
 
 def utc_now_iso() -> str:
@@ -149,6 +149,20 @@ def parse_json_from_model(raw_content: str) -> dict:
 
     data["extractedAmount"] = float(data["extractedAmount"])
     data["confidenceScore"] = float(data["confidenceScore"])
+
+    # Normalize common non-ISO currency codes to ISO 4217
+    currency_aliases = {
+        "RM": "MYR",
+        "RMB": "CNY",
+        "USD": "USD",
+        "SGD": "SGD",
+        "R": "ZAR",
+    }
+    raw_currency = str(data.get("currency", "")).strip().upper()
+    data["currency"] = currency_aliases.get(raw_currency, raw_currency)
+    if len(data["currency"]) < 3:
+        data["currency"] = "MYR"  # Safe default for Malaysia-region platform
+
     return data
 
 
@@ -167,121 +181,105 @@ def get_vision_api_config() -> tuple[str, str, str]:
 
 def get_document_api_config() -> tuple[str, str, str]:
     api_key = os.getenv("DASHSCOPE_DOC_API_KEY") or os.getenv("DASHSCOPE_API_KEY", "")
-    base_url = os.getenv("DASHSCOPE_DOC_BASE_URL", "https://dashscope.aliyuncs.com/compatible-mode/v1")
-    model = os.getenv("DASHSCOPE_DOC_MODEL", "qwen-doc-turbo")
+    base_url = os.getenv("DASHSCOPE_DOC_BASE_URL", "https://cn-hongkong.dashscope.aliyuncs.com/compatible-mode/v1")
+    model = os.getenv("DASHSCOPE_DOC_MODEL", "qwen-plus")
     return api_key, base_url.rstrip("/"), model
 
 
 def call_qwen_ocr(file_bytes: bytes, mime_type: str) -> dict:
-    api_key, base_url, model = get_vision_api_config()
+    api_key = os.getenv("DASHSCOPE_API_KEY", "")
     if not api_key:
         raise RuntimeError("DASHSCOPE_API_KEY is not configured")
 
+    import dashscope
+    dashscope.base_http_api_url = "https://dashscope-intl.aliyuncs.com/api/v1"
+
+    model = os.getenv("DASHSCOPE_OCR_MODEL", "qwen-vl-ocr")
     base64_file = base64.b64encode(file_bytes).decode("utf-8")
     image_data_url = f"data:{mime_type};base64,{base64_file}"
 
-    payload = {
-        "model": model,
-        "messages": [
+    response = dashscope.MultiModalConversation.call(
+        api_key=api_key,
+        model=model,
+        messages=[
             {
                 "role": "user",
                 "content": [
-                    {
-                        "type": "image_url",
-                        "image_url": {"url": image_data_url},
-                        "min_pixels": 32 * 32 * 3,
-                        "max_pixels": 32 * 32 * 8192,
-                    },
-                    {
-                        "type": "text",
-                        "text": build_invoice_extraction_prompt(),
-                    },
+                    {"image": image_data_url},
+                    {"text": build_invoice_extraction_prompt()},
                 ],
             }
         ],
-        "temperature": 0,
-    }
-
-    response = requests.post(
-        f"{base_url}/chat/completions",
-        headers={
-            **build_dashscope_headers(api_key),
-            "Content-Type": "application/json",
-        },
-        json=payload,
-        timeout=REQUEST_TIMEOUT_SECONDS,
+        result_format="message",
+        temperature=0,
     )
-    response.raise_for_status()
-    body = response.json()
-    content = body["choices"][0]["message"]["content"]
+
+    if response.status_code != 200:
+        raise RuntimeError(f"DashScope OCR call failed: {response.code} - {response.message}")
+
+    content = response.output["choices"][0]["message"]["content"]
     return parse_json_from_model(content)
 
 
-def upload_file_for_extraction(file_bytes: bytes, file_name: str, mime_type: str) -> str:
-    api_key, base_url, _model = get_document_api_config()
+def extract_pdf_text(file_bytes: bytes) -> str:
+    """Extract text content from a PDF using PyPDF2."""
+    import io
+    from PyPDF2 import PdfReader
+
+    reader = PdfReader(io.BytesIO(file_bytes))
+    text_parts = []
+    for page in reader.pages:
+        text = page.extract_text()
+        if text:
+            text_parts.append(text)
+
+    if not text_parts:
+        raise ValueError("Could not extract any text from the PDF")
+
+    return "\n\n".join(text_parts)
+
+
+def call_qwen_doc(file_bytes: bytes, file_name: str) -> dict:
+    """Extract invoice data from a PDF by sending its text to qwen-plus via the DashScope SDK.
+
+    The international (dashscope-intl) endpoint does not support qwen-long or
+    qwen-doc-turbo with file_id references. Instead, we extract the PDF text
+    with PyPDF2 and send it to qwen-plus as a regular text prompt.
+    """
+    api_key = os.getenv("DASHSCOPE_DOC_API_KEY") or os.getenv("DASHSCOPE_API_KEY", "")
     if not api_key:
         raise RuntimeError("DASHSCOPE_DOC_API_KEY or DASHSCOPE_API_KEY is not configured for PDF extraction")
 
-    response = requests.post(
-        f"{base_url}/files",
-        headers=build_dashscope_headers(api_key),
-        files={"file": (file_name, file_bytes, mime_type)},
-        data={"purpose": "file-extract"},
-        timeout=REQUEST_TIMEOUT_SECONDS,
+    import dashscope
+    dashscope.base_http_api_url = "https://dashscope-intl.aliyuncs.com/api/v1"
+
+    model = os.getenv("DASHSCOPE_DOC_MODEL", "qwen-plus")
+    pdf_text = extract_pdf_text(file_bytes)
+
+    # Truncate to avoid token limits (qwen-plus supports 128k context)
+    max_chars = 100000
+    if len(pdf_text) > max_chars:
+        pdf_text = pdf_text[:max_chars]
+
+    prompt = (
+        build_invoice_extraction_prompt()
+        + "\n\n--- DOCUMENT CONTENT ---\n\n"
+        + pdf_text
     )
-    response.raise_for_status()
-    body = response.json()
-    file_id = body.get("id")
-    if not file_id:
-        raise ValueError("DashScope file upload did not return a file id")
-    return file_id
 
+    response = dashscope.Generation.call(
+        api_key=api_key,
+        model=model,
+        messages=[{"role": "user", "content": prompt}],
+        result_format="message",
+        temperature=0,
+    )
 
-def call_qwen_doc(file_id: str) -> dict:
-    api_key, base_url, model = get_document_api_config()
-    if not api_key:
-        raise RuntimeError("DASHSCOPE_DOC_API_KEY or DASHSCOPE_API_KEY is not configured for PDF extraction")
+    if response.status_code != 200:
+        raise RuntimeError(f"DashScope document extraction failed: {response.code} - {response.message}")
 
-    payload = {
-        "model": model,
-        "messages": [
-            {"role": "system", "content": "You are a precise invoice extraction assistant."},
-            {"role": "system", "content": f"fileid://{file_id}"},
-            {"role": "user", "content": build_invoice_extraction_prompt()},
-        ],
-        "temperature": 0,
-    }
-
-    last_error_message = None
-    for attempt in range(FILE_PARSE_POLL_ATTEMPTS):
-        response = requests.post(
-            f"{base_url}/chat/completions",
-            headers={
-                **build_dashscope_headers(api_key),
-                "Content-Type": "application/json",
-            },
-            json=payload,
-            timeout=REQUEST_TIMEOUT_SECONDS,
-        )
-
-        if response.status_code >= 500:
-            response.raise_for_status()
-
-        body = response.json()
-
-        if response.ok and body.get("choices"):
-            content = body["choices"][0]["message"]["content"]
-            return parse_json_from_model(content)
-
-        error_message = json.dumps(body)
-        last_error_message = error_message
-        if "processing" in error_message.lower() or "parsed" in error_message.lower():
-            time.sleep(FILE_PARSE_POLL_INTERVAL_SECONDS)
-            continue
-
-        response.raise_for_status()
-
-    raise RuntimeError(f"Timed out waiting for DashScope document parsing: {last_error_message}")
+    content = response.output["choices"][0]["message"]["content"]
+    return parse_json_from_model(content)
 
 
 def extract_invoice_with_alibaba_ai(file_bytes: bytes, file_name: str, mime_type: str) -> dict:
@@ -289,8 +287,7 @@ def extract_invoice_with_alibaba_ai(file_bytes: bytes, file_name: str, mime_type
         return call_qwen_ocr(file_bytes, mime_type)
 
     if mime_type == "application/pdf":
-        file_id = upload_file_for_extraction(file_bytes, file_name, mime_type)
-        return call_qwen_doc(file_id)
+        return call_qwen_doc(file_bytes, file_name)
 
     raise ValueError("Unsupported file type. Allowed types: PDF, JPG, PNG")
 

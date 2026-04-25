@@ -1,0 +1,35 @@
+edition: 3.0.0
+name: tng-finhack-invoice
+access: default-2
+
+vars:
+  region: ap-southeast-3
+
+resources:
+  invoiceUpload:
+    component: fc3
+    props:
+      region: ${vars.region}
+      functionName: invoice-upload
+      runtime: custom.debian12
+      code: ./function-compute/invoice-upload
+      memorySize: 512
+      timeout: 90
+      internetAccess: true
+      environmentVariables:
+        AWS_WEBHOOK_URL: ${env('AWS_WEBHOOK_URL')}
+        DASHSCOPE_API_KEY: ${env('DASHSCOPE_API_KEY')}
+        DASHSCOPE_BASE_URL: https://dashscope-intl.aliyuncs.com/compatible-mode/v1
+        DASHSCOPE_OCR_MODEL: qwen-vl-ocr
+        DASHSCOPE_DOC_API_KEY: ${env('DASHSCOPE_DOC_API_KEY')}
+        DASHSCOPE_DOC_BASE_URL: https://dashscope-intl.aliyuncs.com/compatible-mode/v1
+        DASHSCOPE_DOC_MODEL: qwen-plus
+      triggers:
+        - triggerName: httpTrigger
+          triggerType: http
+          qualifier: LATEST
+          triggerConfig:
+            authType: anonymous
+            methods:
+              - POST
+              - OPTIONS

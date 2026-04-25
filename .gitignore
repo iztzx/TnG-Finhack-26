@@ -1,0 +1,57 @@
+# Secrets
+.env
+alibaba/.env
+frontend/.env
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+*.pkl
+
+# Alibaba
+alibaba/.s/
+
+# AWS
+backend/.aws-sam/
+
+# Node
+node_modules/
+frontend/dist/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Binaries & large files
+*.pdf
+*.pyd
+
+# Vendored dependencies (Alibaba FC)
+alibaba/function-compute/invoice-upload/PyPDF2/
+alibaba/function-compute/invoice-upload/aiohttp/
+alibaba/function-compute/invoice-upload/aiohappyeyeballs/
+alibaba/function-compute/invoice-upload/aiosignal/
+alibaba/function-compute/invoice-upload/attr/
+alibaba/function-compute/invoice-upload/attrs/
+alibaba/function-compute/invoice-upload/bin/
+alibaba/function-compute/invoice-upload/blinker/
+alibaba/function-compute/invoice-upload/certifi/
+alibaba/function-compute/invoice-upload/charset_normalizer/
+alibaba/function-compute/invoice-upload/click/
+alibaba/function-compute/invoice-upload/colorama/
+alibaba/function-compute/invoice-upload/dashscope/
+alibaba/function-compute/invoice-upload/flask/
+alibaba/function-compute/invoice-upload/frozenlist/
+alibaba/function-compute/invoice-upload/idna/
+alibaba/function-compute/invoice-upload/itsdangerous/
+alibaba/function-compute/invoice-upload/jinja2/
+alibaba/function-compute/invoice-upload/markupsafe/
+alibaba/function-compute/invoice-upload/multidict/
+alibaba/function-compute/invoice-upload/propcache/
+alibaba/function-compute/invoice-upload/requests/
+alibaba/function-compute/invoice-upload/urllib3/
+alibaba/function-compute/invoice-upload/websocket/
+alibaba/function-compute/invoice-upload/werkzeug/
+alibaba/function-compute/invoice-upload/yarl/
+alibaba/function-compute/invoice-upload/*.dist-info/

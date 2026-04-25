@@ -1,27 +1,74 @@
 import React from 'react';
 import { Activity, AlertCircle, Clock, FileText, RefreshCw, ShieldCheck, Wallet, ArrowRight, Banknote, TimerReset, CheckCircle2, TrendingUp } from 'lucide-react';
+import { getAdminOverview } from '../../lib/api';
 
 export default function CommandCenter() {
   const [lastUpdated, setLastUpdated] = React.useState(new Date());
   const [isRefreshing, setIsRefreshing] = React.useState(false);
+  const [metrics, setMetrics] = React.useState({
+    totalInvoices: 142,
+    capitalDeployed: 4200000,
+    overdueExposure: 85000,
+    pendingReview: 18,
+  });
+  const [activityFeed, setActivityFeed] = React.useState(null);
 
-  const handleRefresh = () => {
+  // Load real data on mount
+  React.useEffect(() => {
+    loadData();
+  }, []);
+
+  const loadData = async () => {
+    try {
+      const data = await getAdminOverview();
+      if (data) {
+        setMetrics((prev) => ({
+          ...prev,
+          totalInvoices: data.totalInvoices || prev.totalInvoices,
+          capitalDeployed: data.capitalDeployed || prev.capitalDeployed,
+          pendingReview: data.pendingReview ?? prev.pendingReview,
+        }));
+
+        // Build activity feed from real invoices
+        if (data.invoices?.length > 0) {
+          const feed = data.invoices.slice(0, 5).map((inv) => {
+            const statusMap = {
+              FUNDED: { icon: Banknote, title: `Invoice #${inv.invoiceId} funded`, meta: `RM ${(inv.offerData?.netDisbursement || inv.amount || 0).toLocaleString()} disbursed`, badge: 'Treasury', badgeTone: 'bg-blue-500/15 text-blue-300' },
+              REPAID: { icon: CheckCircle2, title: `Invoice #${inv.invoiceId} repaid`, meta: `RM ${(inv.amount || 0).toLocaleString()} settled`, badge: 'Approved', badgeTone: 'bg-emerald-500/15 text-emerald-300' },
+              OFFER_MADE: { icon: CheckCircle2, title: `Invoice #${inv.invoiceId} approved`, meta: `Offer generated for ${inv.vendorName || 'SME'}`, badge: 'Approved', badgeTone: 'bg-emerald-500/15 text-emerald-300' },
+              PENDING_REVIEW: { icon: TimerReset, title: `Invoice #${inv.invoiceId} queued`, meta: `Awaiting risk review`, badge: 'Ops', badgeTone: 'bg-violet-500/15 text-violet-300' },
+              ANALYZED: { icon: Activity, title: `Invoice #${inv.invoiceId} scored`, meta: `ML scoring complete`, badge: 'System', badgeTone: 'bg-cyan-500/15 text-cyan-300' },
+            };
+            const mapping = statusMap[inv.status] || statusMap.PENDING_REVIEW;
+            return {
+              ...mapping,
+              time: inv.invoiceDate || 'Recent',
+            };
+          });
+          setActivityFeed(feed);
+        }
+      }
+    } catch {
+      // keep defaults
+    }
+  };
+
+  const handleRefresh = async () => {
     setIsRefreshing(true);
-    setTimeout(() => {
-      setLastUpdated(new Date());
-      setIsRefreshing(false);
-    }, 1000);
+    await loadData();
+    setLastUpdated(new Date());
+    setIsRefreshing(false);
   };
 
   const topMetrics = [
-    { label: 'Invoices in system', value: '142', delta: '+12% from yesterday', icon: FileText, tone: 'from-blue-600/25 to-blue-400/5 text-blue-100 border-blue-400/15' },
-    { label: 'Capital currently deployed', value: 'RM 4.2M', delta: 'RM 350k disbursed today', icon: Wallet, tone: 'from-emerald-500/20 to-emerald-400/5 text-emerald-100 border-emerald-400/15' },
-    { label: 'Overdue exposure', value: 'RM 85k', delta: '2 deals require intervention', icon: AlertCircle, tone: 'from-rose-500/20 to-rose-400/5 text-rose-100 border-rose-400/15' },
-    { label: 'Cases pending review', value: '18', delta: 'Median wait 23 mins', icon: Clock, tone: 'from-violet-500/20 to-violet-400/5 text-violet-100 border-violet-400/15' },
+    { label: 'Invoices in system', value: String(metrics.totalInvoices), delta: 'Total across all SMEs', icon: FileText, tone: 'from-blue-600/25 to-blue-400/5 text-blue-100 border-blue-400/15' },
+    { label: 'Capital currently deployed', value: `RM ${(metrics.capitalDeployed / 1000000).toFixed(1)}M`, delta: 'Active funded invoices', icon: Wallet, tone: 'from-emerald-500/20 to-emerald-400/5 text-emerald-100 border-emerald-400/15' },
+    { label: 'Overdue exposure', value: `RM ${(metrics.overdueExposure / 1000).toFixed(0)}k`, delta: 'Requires monitoring', icon: AlertCircle, tone: 'from-rose-500/20 to-rose-400/5 text-rose-100 border-rose-400/15' },
+    { label: 'Cases pending review', value: String(metrics.pendingReview), delta: 'Awaiting action', icon: Clock, tone: 'from-violet-500/20 to-violet-400/5 text-violet-100 border-violet-400/15' },
   ];
 
   const actionQueue = [
-    { title: 'Review pending invoices', meta: '18 submissions waiting on action', accent: 'bg-blue-600', count: '18' },
+    { title: 'Review pending invoices', meta: `${metrics.pendingReview} submissions waiting on action`, accent: 'bg-blue-600', count: String(metrics.pendingReview) },
     { title: 'Approve disbursement batches', meta: '5 ready after risk checks', accent: 'bg-slate-700', count: '5' },
     { title: 'Resolve fraud alerts', meta: '1 high-priority anomaly surfaced', accent: 'bg-rose-600', count: '1' },
     { title: 'Generate treasury report', meta: 'Export today\'s funding summary', accent: 'bg-emerald-600', count: 'Live' },
@@ -89,13 +136,13 @@ export default function CommandCenter() {
             </button>
           </div>
           <div className="space-y-3">
-            {[
+            {(activityFeed || [
               { icon: CheckCircle2, title: 'Invoice #INV-2026-1001 approved', meta: 'Approved by Finance Manager', time: '10 minutes ago', badge: 'Approved', badgeTone: 'bg-emerald-500/15 text-emerald-300' },
               { icon: Banknote, title: 'Disbursement batch released', meta: 'RM 350,000 settled to 7 SMEs', time: '22 minutes ago', badge: 'Treasury', badgeTone: 'bg-blue-500/15 text-blue-300' },
               { icon: AlertCircle, title: 'Fraud alert escalated', meta: 'Duplicate invoice evidence detected', time: '34 minutes ago', badge: 'Alert', badgeTone: 'bg-rose-500/15 text-rose-300' },
               { icon: TimerReset, title: 'Review queue SLA reset', meta: 'Priority reviewer reassigned', time: '48 minutes ago', badge: 'Ops', badgeTone: 'bg-violet-500/15 text-violet-300' },
               { icon: Activity, title: 'Carrier verification resynced', meta: 'All route integrity checks passed', time: '1 hour ago', badge: 'System', badgeTone: 'bg-cyan-500/15 text-cyan-300' },
-            ].map((item) => (
+            ]).map((item) => (
               <div key={item.title} className="flex items-start gap-4 rounded-3xl border border-white/8 bg-white/[0.03] p-4 transition-colors hover:bg-white/[0.05]">
                 <div className="mt-0.5 rounded-2xl border border-white/8 bg-white/[0.05] p-3 text-cyan-200">
                   <item.icon className="h-4 w-4" />

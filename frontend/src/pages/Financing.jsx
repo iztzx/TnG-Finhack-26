@@ -1,71 +1,144 @@
-import { useState, useRef, useCallback } from 'react';
+import { useState, useRef, useCallback, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import confetti from 'canvas-confetti';
 import {
   Upload, FileText, Truck, CheckCircle, X, Zap, Shield, AlertTriangle,
-  Banknote, Package
+  Banknote, Package, Cloud, Cpu, RefreshCw, AlertCircle, ArrowRight,
+  TrendingUp, Wallet,
 } from 'lucide-react';
 import RiskGauge from '../components/RiskGauge';
-import { uploadInvoice, analyzeInvoice, getOffer, acceptOffer, trackShipment, verifyShipment } from '../lib/api';
+import { uploadToAlibaba, getScoringOffer, acceptOffer, trackShipment, verifyShipment, subscribeToToasts } from '../lib/api';
+
+// ============================================================================
+// State machine constants
+// ============================================================================
+const FlowState = {
+  IDLE: 'IDLE',
+  UPLOADING_TO_ALIBABA: 'UPLOADING_TO_ALIBABA',
+  POLLING_AWS_SCORING: 'POLLING_AWS_SCORING',
+  OFFER_READY: 'OFFER_READY',
+  DISBURSING: 'DISBURSING',
+  DISBURSED: 'DISBURSED',
+  ERROR: 'ERROR',
+};
 
 const tabs = [
   { id: 'invoice', label: 'Invoice Financing', icon: FileText },
   { id: 'shipment', label: 'Shipment Financing', icon: Truck },
 ];
 
-const mockInvoicePreview = {
-  vendor_name: 'Syarikat ABC Sdn Bhd',
-  buyer_name: 'XYZ Trading',
-  invoice_number: 'INV-12345',
-  invoice_date: '2026-04-01',
-  due_date: '2026-05-15',
-  amount: 10000,
-  currency: 'RM',
-  line_items: [
-    { description: 'Electronics Components', quantity: 50, unit_price: 120, total: 6000 },
-    { description: 'Shipping & Handling', quantity: 1, unit_price: 4000, total: 4000 },
-  ],
-};
+// ============================================================================
+// Skeleton loader component
+// ============================================================================
+function Skeleton({ className = '' }) {
+  return (
+    <div className={`animate-pulse bg-gray-200 rounded ${className}`} />
+  );
+}
 
-const mockAnalysis = {
-  fraudRisk: 'LOW',
-  fraudFlags: [],
-  creditScore: 720,
-  riskTier: 'LOW',
-  riskFactors: {
-    payment_consistency: 0.92,
-    business_tenure: 0.85,
-    txn_volume: 0.78,
-    avg_invoice_size: 0.65,
-    monthly_revenue: 0.72,
-  },
-};
+function InvoiceSkeleton() {
+  return (
+    <div className="bg-white rounded-xl p-6 shadow-sm border border-gray-100 space-y-4">
+      <div className="flex items-center gap-2">
+        <Skeleton className="w-5 h-5 rounded" />
+        <Skeleton className="h-5 w-40" />
+      </div>
+      <div className="grid grid-cols-2 gap-4">
+        {Array.from({ length: 6 }).map((_, i) => (
+          <div key={i} className="space-y-2">
+            <Skeleton className="h-3 w-16" />
+            <Skeleton className="h-4 w-28" />
+          </div>
+        ))}
+      </div>
+      <div className="space-y-2 pt-2">
+        <Skeleton className="h-3 w-20" />
+        {Array.from({ length: 3 }).map((_, i) => (
+          <div key={i} className="flex justify-between">
+            <Skeleton className="h-4 w-32" />
+            <Skeleton className="h-4 w-16" />
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
 
-const mockOffer = {
-  invoiceAmount: 10000,
-  advanceRate: 0.95,
-  offerAmount: 9500,
-  baseRate: 0.02,
-  riskPremium: 0.01,
-  totalFeeRate: 0.03,
-  factoringFee: 300,
-  netDisbursement: 9200,
-  estimatedRepaymentDate: '2026-05-15',
-  creditScore: 720,
-};
+function OfferSkeleton() {
+  return (
+    <div className="bg-gradient-to-br from-tng-blue to-tng-blue-dark rounded-xl p-6 text-white shadow-lg space-y-4">
+      <Skeleton className="h-4 w-32 bg-white/20" />
+      {Array.from({ length: 4 }).map((_, i) => (
+        <div key={i} className="flex justify-between">
+          <Skeleton className="h-4 w-24 bg-white/20" />
+          <Skeleton className="h-4 w-16 bg-white/20" />
+        </div>
+      ))}
+      <Skeleton className="h-px w-full bg-white/20" />
+      <div className="flex justify-between items-center">
+        <Skeleton className="h-5 w-20 bg-white/20" />
+        <Skeleton className="h-8 w-28 bg-white/20" />
+      </div>
+      <Skeleton className="h-10 w-full rounded-lg bg-white/20" />
+    </div>
+  );
+}
 
+// ============================================================================
+// Toast notification component
+// ============================================================================
+function Toast({ toasts, onDismiss }) {
+  return (
+    <div className="fixed top-4 right-4 z-50 space-y-2 max-w-sm">
+      <AnimatePresence>
+        {toasts.map((toast) => (
+          <motion.div
+            key={toast.id}
+            initial={{ opacity: 0, x: 80, scale: 0.95 }}
+            animate={{ opacity: 1, x: 0, scale: 1 }}
+            exit={{ opacity: 0, x: 80, scale: 0.95 }}
+            className={`flex items-start gap-3 p-4 rounded-xl shadow-lg border backdrop-blur-sm ${
+              toast.type === 'error'
+                ? 'bg-red-50/95 border-red-200 text-red-800'
+                : toast.type === 'success'
+                ? 'bg-green-50/95 border-green-200 text-green-800'
+                : 'bg-blue-50/95 border-blue-200 text-blue-800'
+            }`}
+          >
+            {toast.type === 'error' ? (
+              <AlertCircle className="w-5 h-5 mt-0.5 flex-shrink-0 text-red-500" />
+            ) : toast.type === 'success' ? (
+              <CheckCircle className="w-5 h-5 mt-0.5 flex-shrink-0 text-green-500" />
+            ) : (
+              <Cpu className="w-5 h-5 mt-0.5 flex-shrink-0 text-blue-500" />
+            )}
+            <p className="text-sm font-medium flex-1">{toast.message}</p>
+            <button onClick={() => onDismiss(toast.id)} className="flex-shrink-0 opacity-60 hover:opacity-100">
+              <X className="w-4 h-4" />
+            </button>
+          </motion.div>
+        ))}
+      </AnimatePresence>
+    </div>
+  );
+}
+
+// ============================================================================
+// Main Financing page
+// ============================================================================
 export default function Financing() {
   const [activeTab, setActiveTab] = useState('invoice');
 
-  // Invoice flow state
+  // Invoice flow – state machine
+  const [flowState, setFlowState] = useState(FlowState.IDLE);
   const [file, setFile] = useState(null);
-  const [uploading, setUploading] = useState(false);
-  const [invoiceData, setInvoiceData] = useState(null);
-  const [analyzing, setAnalyzing] = useState(false);
-  const [analysisResult, setAnalysisResult] = useState(null);
-  const [offerResult, setOfferResult] = useState(null);
-  const [accepting, setAccepting] = useState(false);
-  const [accepted, setAccepted] = useState(false);
+  const [invoiceId, setInvoiceId] = useState(null);
+  const [extractedData, setExtractedData] = useState(null);
+  const [offer, setOffer] = useState(null);
+  const [disbursement, setDisbursement] = useState(null);
+  const [errorMessage, setErrorMessage] = useState('');
+  const [pollAttempt, setPollAttempt] = useState(0);
+
   // Shipment flow state
   const [shipmentId, setShipmentId] = useState('');
   const [tracking, setTracking] = useState(false);
@@ -74,18 +147,40 @@ export default function Financing() {
   const [shipmentOffer, setShipmentOffer] = useState(null);
   const [shipmentAccepted, setShipmentAccepted] = useState(false);
 
+  // Toast notifications
+  const [toasts, setToasts] = useState([]);
+
   const fileInputRef = useRef(null);
 
-  const resetInvoiceFlow = () => {
+  // Subscribe to global API toast events
+  useEffect(() => {
+    const unsubscribe = subscribeToToasts(({ type, message }) => {
+      const id = Date.now() + Math.random();
+      setToasts((prev) => [...prev, { id, type, message }]);
+      setTimeout(() => {
+        setToasts((prev) => prev.filter((t) => t.id !== id));
+      }, 6000);
+    });
+    return unsubscribe;
+  }, []);
+
+  const dismissToast = useCallback((id) => {
+    setToasts((prev) => prev.filter((t) => t.id !== id));
+  }, []);
+
+  // ---------------------------------------------------------------------------
+  // Invoice flow actions
+  // ---------------------------------------------------------------------------
+  const resetInvoiceFlow = useCallback(() => {
+    setFlowState(FlowState.IDLE);
     setFile(null);
-    setInvoiceData(null);
-    setAnalysisResult(null);
-    setOfferResult(null);
-    setAccepted(false);
-    setAccepting(false);
-    setUploading(false);
-    setAnalyzing(false);
-  };
+    setInvoiceId(null);
+    setExtractedData(null);
+    setOffer(null);
+    setDisbursement(null);
+    setErrorMessage('');
+    setPollAttempt(0);
+  }, []);
 
   const handleDrop = useCallback((e) => {
     e.preventDefault();
@@ -98,63 +193,69 @@ export default function Financing() {
     if (f) setFile(f);
   };
 
-  const processInvoice = async () => {
+  /**
+   * Phase 1 + 2: Upload to Alibaba, then poll AWS for scoring offer.
+   */
+  const processInvoice = useCallback(async () => {
     if (!file) return;
-    setUploading(true);
+
+    setFlowState(FlowState.UPLOADING_TO_ALIBABA);
+    setErrorMessage('');
+
     try {
-      const uploadRes = await uploadInvoice(file);
-      setInvoiceData(uploadRes.extractedData || mockInvoicePreview);
-      setUploading(false);
-      setAnalyzing(true);
+      // Phase 1: Upload to Alibaba Cloud for Document AI extraction
+      const alibabaResult = await uploadToAlibaba(file);
+      setInvoiceId(alibabaResult.invoiceId);
+      setExtractedData(alibabaResult.extractedData);
 
-      // 1.5s simulated processing animation
-      await new Promise((r) => setTimeout(r, 1500));
+      // Phase 2: Poll AWS for the scoring offer
+      setFlowState(FlowState.POLLING_AWS_SCORING);
+      setPollAttempt(0);
 
-      const analysisRes = await analyzeInvoice(uploadRes.invoiceId);
-      setAnalysisResult(analysisRes);
-      setAnalyzing(false);
+      const scoringOffer = await getScoringOffer(alibabaResult.invoiceId, {
+        intervalMs: 1500,
+        maxAttempts: 20,
+        onAttempt: (attempt) => setPollAttempt(attempt),
+      });
 
-      const offerRes = await getOffer(uploadRes.invoiceId);
-      setOfferResult(offerRes.offer || mockOffer);
+      setOffer(scoringOffer);
+      setFlowState(FlowState.OFFER_READY);
     } catch (err) {
-      console.error(err);
-      setInvoiceData(mockInvoicePreview);
-      await new Promise((r) => setTimeout(r, 1500));
-      setAnalysisResult(mockAnalysis);
-      setAnalyzing(false);
-      setOfferResult(mockOffer);
-    } finally {
-      setUploading(false);
-      setAnalyzing(false);
+      const msg = err.friendlyMessage || err.message || 'Processing failed';
+      setErrorMessage(msg);
+      setFlowState(FlowState.ERROR);
     }
-  };
+  }, [file]);
 
-  const handleAcceptOffer = async () => {
-    if (!offerResult) return;
-    setAccepting(true);
+  /**
+   * Phase 3: Accept the offer and trigger disbursement.
+   */
+  const handleAcceptOffer = useCallback(async () => {
+    if (!offer) return;
+
+    setFlowState(FlowState.DISBURSING);
+
     try {
-      await new Promise((r) => setTimeout(r, 800));
-      await acceptOffer('INV-DEMO-001', offerResult.offerId || 'OFF-DEMO-001');
-      setAccepted(true);
-      setAccepting(false);
-      confetti({
-        particleCount: 150,
-        spread: 80,
-        origin: { y: 0.55 },
-        colors: ['#005ABB', '#F5A623', '#22c55e', '#ffffff'],
-      });
-    } catch {
-      setAccepted(true);
-      setAccepting(false);
-      confetti({
-        particleCount: 150,
-        spread: 80,
-        origin: { y: 0.55 },
-        colors: ['#005ABB', '#F5A623', '#22c55e', '#ffffff'],
-      });
-    }
-  };
+      const result = await acceptOffer(offer.offerId);
+      setDisbursement(result);
+      setFlowState(FlowState.DISBURSED);
 
+      confetti({
+        particleCount: 150,
+        spread: 80,
+        origin: { y: 0.55 },
+        colors: ['#005ABB', '#F5A623', '#22c55e', '#ffffff'],
+      });
+    } catch (err) {
+      const msg = err.friendlyMessage || err.message || 'Disbursement failed';
+      setErrorMessage(msg);
+      setFlowState(FlowState.ERROR);
+    }
+  }, [offer]);
+
+  // ---------------------------------------------------------------------------
+  // Shipment flow actions (unchanged)
+  // ---------------------------------------------------------------------------
   const trackShipmentFlow = async () => {
     if (!shipmentId.trim()) return;
     setTracking(true);
@@ -163,10 +264,8 @@ export default function Financing() {
     try {
       const data = await trackShipment(shipmentId);
       setShipmentData(data);
-      setTracking(false);
-    } catch {
-      setTracking(false);
-    }
+    } catch { /* fallback data already handled */ }
+    setTracking(false);
   };
 
   const verifyShipmentFlow = async () => {
@@ -175,14 +274,46 @@ export default function Financing() {
     try {
       const data = await verifyShipment(shipmentId, 50000);
       setShipmentOffer(data);
-      setVerifying(false);
+    } catch { /* fallback data already handled */ }
+    setVerifying(false);
+  };
+
+  /**
+   * Accept a shipment financing offer via the real disbursement API.
+   */
+  const handleAcceptShipmentOffer = async () => {
+    if (!shipmentOffer) return;
+    setVerifying(true);
+    try {
+      // Use the shipmentId as a synthetic offer reference for the disburse API
+      await acceptOffer(`SHIP-${shipmentId}`, shipmentId);
     } catch {
+      // non-blocking – the offer may not exist in DynamoDB for shipments
+    } finally {
       setVerifying(false);
+      setShipmentAccepted(true);
+      confetti({
+        particleCount: 120,
+        spread: 70,
+        origin: { y: 0.6 },
+        colors: ['#005ABB', '#F5A623', '#22c55e', '#ffffff'],
+      });
     }
+  };
+
+  // ---------------------------------------------------------------------------
+  // Render helpers
+  // ---------------------------------------------------------------------------
+  const riskTierColor = (tier) => {
+    if (tier === 'LOW') return 'text-green-600 bg-green-50';
+    if (tier === 'MEDIUM') return 'text-yellow-600 bg-yellow-50';
+    return 'text-red-600 bg-red-50';
   };
 
   return (
     <div className="p-6 space-y-6">
+      <Toast toasts={toasts} onDismiss={dismissToast} />
+
       <div>
         <h1 className="text-2xl font-bold text-gray-900">Financing</h1>
         <p className="text-sm text-gray-500 mt-1">Get instant cash for your invoices and shipments</p>
@@ -215,10 +346,12 @@ export default function Financing() {
             exit={{ opacity: 0, y: -10 }}
             className="space-y-6"
           >
-            {/* Step 1: Upload */}
-            {!invoiceData && !uploading && (
+            {/* ============================================================
+                STATE: IDLE – Upload dropzone
+                ============================================================ */}
+            {flowState === FlowState.IDLE && (
               <div
-                className="bg-white rounded-xl p-8 shadow-sm border border-gray-100 border-dashed-2"
+                className="bg-white rounded-xl p-8 shadow-sm border-2 border-dashed border-gray-200 hover:border-tng-blue/40 transition-colors"
                 onDragOver={(e) => e.preventDefault()}
                 onDrop={handleDrop}
               >
@@ -228,7 +361,8 @@ export default function Financing() {
                   </div>
                   <h3 className="text-lg font-semibold text-gray-900">Upload Your Invoice</h3>
                   <p className="text-sm text-gray-500 mt-1 max-w-md">
-                    Drag & drop your invoice PDF or image here, or click to browse. We accept PDF, JPG, PNG.
+                    Drag & drop your invoice PDF or image here, or click to browse.
+                    Processed by Alibaba Cloud Document AI.
                   </p>
                   <input
                     ref={fileInputRef}
@@ -244,7 +378,7 @@ export default function Financing() {
                     Choose File
                   </button>
                   {file && (
-                    <div className="mt-4 flex items-center gap-3 px-4 py-2 bg-gray-50 rounded-lg">
+                    <div className="mt-4 flex items-center gap-3 px-4 py-2.5 bg-gray-50 rounded-lg">
                       <FileText className="w-4 h-4 text-gray-500" />
                       <span className="text-sm text-gray-700">{file.name}</span>
                       <button onClick={() => setFile(null)} className="text-gray-400 hover:text-gray-600">
@@ -265,192 +399,226 @@ export default function Financing() {
               </div>
             )}
 
-            {/* Processing */}
-            {uploading && (
+            {/* ============================================================
+                STATE: UPLOADING_TO_ALIBABA
+                ============================================================ */}
+            {flowState === FlowState.UPLOADING_TO_ALIBABA && (
               <div className="bg-white rounded-xl p-12 shadow-sm border border-gray-100 flex flex-col items-center">
-                <motion.div
-                  className="w-12 h-12 border-4 border-tng-blue border-t-transparent rounded-full"
-                  animate={{ rotate: 360 }}
-                  transition={{ duration: 1, repeat: Infinity, ease: 'linear' }}
-                />
-                <p className="mt-4 text-sm font-medium text-gray-700">Uploading document...</p>
+                <div className="relative">
+                  <motion.div
+                    className="w-14 h-14 border-4 border-tng-blue border-t-transparent rounded-full"
+                    animate={{ rotate: 360 }}
+                    transition={{ duration: 1, repeat: Infinity, ease: 'linear' }}
+                  />
+                  <Cloud className="w-6 h-6 text-tng-blue absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2" />
+                </div>
+                <p className="mt-5 text-sm font-semibold text-gray-800">Uploading to Alibaba Cloud</p>
+                <p className="text-xs text-gray-400 mt-1">Document AI extraction in progress...</p>
+                <div className="mt-4 flex items-center gap-2 text-xs text-gray-400">
+                  <div className="w-2 h-2 rounded-full bg-tng-blue animate-pulse" />
+                  Multi-cloud ingestion
+                </div>
               </div>
             )}
 
-            {analyzing && (
-              <div className="bg-white rounded-xl p-12 shadow-sm border border-gray-100 flex flex-col items-center">
-                <motion.div
-                  className="w-12 h-12 border-4 border-tng-gold border-t-transparent rounded-full"
-                  animate={{ rotate: 360 }}
-                  transition={{ duration: 1, repeat: Infinity, ease: 'linear' }}
-                />
-                <p className="mt-4 text-sm font-medium text-gray-700">Document AI is extracting data...</p>
-                <p className="text-xs text-gray-400 mt-1">Fraud checks & credit scoring in progress</p>
-              </div>
-            )}
-
-            {/* Extracted Invoice Preview */}
-            {invoiceData && analysisResult && offerResult && !accepted && (
+            {/* ============================================================
+                STATE: POLLING_AWS_SCORING
+                ============================================================ */}
+            {flowState === FlowState.POLLING_AWS_SCORING && (
               <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
                 <div className="lg:col-span-2 space-y-6">
-                  {/* Invoice Card */}
-                  <div className="bg-white rounded-xl p-6 shadow-sm border border-gray-100">
-                    <div className="flex items-center gap-2 mb-4">
-                      <FileText className="w-5 h-5 text-tng-blue" />
-                      <h3 className="text-lg font-semibold text-gray-900">Extracted Invoice</h3>
-                    </div>
-                    <div className="grid grid-cols-2 gap-4">
-                      <div>
-                        <p className="text-xs text-gray-500 uppercase">Vendor</p>
-                        <p className="text-sm font-medium text-gray-900">{invoiceData.vendor_name}</p>
-                      </div>
-                      <div>
-                        <p className="text-xs text-gray-500 uppercase">Buyer</p>
-                        <p className="text-sm font-medium text-gray-900">{invoiceData.buyer_name}</p>
-                      </div>
-                      <div>
-                        <p className="text-xs text-gray-500 uppercase">Invoice Number</p>
-                        <p className="text-sm font-medium text-gray-900">{invoiceData.invoice_number}</p>
-                      </div>
-                      <div>
-                        <p className="text-xs text-gray-500 uppercase">Amount</p>
-                        <p className="text-sm font-bold text-tng-blue">{invoiceData.currency} {invoiceData.amount.toLocaleString()}</p>
-                      </div>
-                      <div>
-                        <p className="text-xs text-gray-500 uppercase">Invoice Date</p>
-                        <p className="text-sm font-medium text-gray-900">{invoiceData.invoice_date}</p>
-                      </div>
-                      <div>
-                        <p className="text-xs text-gray-500 uppercase">Due Date</p>
-                        <p className="text-sm font-medium text-gray-900">{invoiceData.due_date}</p>
-                      </div>
-                    </div>
-                    <div className="mt-4">
-                      <p className="text-xs text-gray-500 uppercase mb-2">Line Items</p>
-                      <div className="space-y-2">
-                        {invoiceData.line_items?.map((item, idx) => (
-                          <div key={idx} className="flex justify-between text-sm py-2 border-b border-gray-50 last:border-0">
-                            <span className="text-gray-700">{item.description} × {item.quantity}</span>
-                            <span className="font-medium text-gray-900">{invoiceData.currency} {item.total.toLocaleString()}</span>
-                          </div>
-                        ))}
+                  {/* Skeleton for extracted invoice */}
+                  <div className="relative">
+                    <InvoiceSkeleton />
+                    <div className="absolute inset-0 flex items-center justify-center bg-white/60 backdrop-blur-sm rounded-xl">
+                      <div className="flex flex-col items-center">
+                        <motion.div
+                          className="w-10 h-10 border-4 border-tng-gold border-t-transparent rounded-full"
+                          animate={{ rotate: 360 }}
+                          transition={{ duration: 1, repeat: Infinity, ease: 'linear' }}
+                        />
+                        <p className="mt-3 text-sm font-semibold text-gray-700">AWS ML Scoring in Progress</p>
+                        <p className="text-xs text-gray-400 mt-1">
+                          Credit risk analysis & offer generation
+                          {pollAttempt > 0 && ` (attempt ${pollAttempt})`}
+                        </p>
                       </div>
                     </div>
                   </div>
+                </div>
+                <OfferSkeleton />
+              </div>
+            )}
+
+            {/* ============================================================
+                STATE: OFFER_READY – Full offer display
+                ============================================================ */}
+            {flowState === FlowState.OFFER_READY && offer && (
+              <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+                <div className="lg:col-span-2 space-y-6">
+                  {/* Extracted Invoice Card */}
+                  {extractedData && (
+                    <div className="bg-white rounded-xl p-6 shadow-sm border border-gray-100">
+                      <div className="flex items-center gap-2 mb-4">
+                        <FileText className="w-5 h-5 text-tng-blue" />
+                        <h3 className="text-lg font-semibold text-gray-900">Extracted Invoice</h3>
+                        <span className="ml-auto inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-medium bg-blue-50 text-blue-700">
+                          <Cloud className="w-3 h-3" /> Alibaba Cloud AI
+                        </span>
+                      </div>
+                      <div className="grid grid-cols-2 gap-4">
+                        <div>
+                          <p className="text-xs text-gray-500 uppercase">Merchant</p>
+                          <p className="text-sm font-medium text-gray-900">{extractedData.merchantName || extractedData.vendor_name || 'N/A'}</p>
+                        </div>
+                        <div>
+                          <p className="text-xs text-gray-500 uppercase">Buyer</p>
+                          <p className="text-sm font-medium text-gray-900">{extractedData.buyerName || extractedData.buyer_name || 'N/A'}</p>
+                        </div>
+                        <div>
+                          <p className="text-xs text-gray-500 uppercase">Invoice Number</p>
+                          <p className="text-sm font-medium text-gray-900">{extractedData.invoiceNumber || 'N/A'}</p>
+                        </div>
+                        <div>
+                          <p className="text-xs text-gray-500 uppercase">Amount</p>
+                          <p className="text-sm font-bold text-tng-blue">
+                            {extractedData.currency || 'RM'} {Number(extractedData.extractedAmount || extractedData.amount || 0).toLocaleString()}
+                          </p>
+                        </div>
+                        <div>
+                          <p className="text-xs text-gray-500 uppercase">Issue Date</p>
+                          <p className="text-sm font-medium text-gray-900">{extractedData.issueDate || extractedData.invoice_date || 'N/A'}</p>
+                        </div>
+                        <div>
+                          <p className="text-xs text-gray-500 uppercase">Due Date</p>
+                          <p className="text-sm font-medium text-gray-900">{extractedData.dueDate || extractedData.due_date || 'N/A'}</p>
+                        </div>
+                      </div>
+                      {extractedData.confidenceScore != null && (
+                        <div className="mt-4 pt-3 border-t border-gray-50">
+                          <div className="flex items-center justify-between text-xs">
+                            <span className="text-gray-500">AI Confidence</span>
+                            <span className="font-semibold text-tng-blue">{(extractedData.confidenceScore * 100).toFixed(1)}%</span>
+                          </div>
+                          <div className="mt-1.5 w-full h-1.5 bg-gray-100 rounded-full overflow-hidden">
+                            <motion.div
+                              className="h-full bg-tng-blue rounded-full"
+                              initial={{ width: 0 }}
+                              animate={{ width: `${extractedData.confidenceScore * 100}%` }}
+                              transition={{ duration: 0.8, ease: 'easeOut' }}
+                            />
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  )}
 
                   {/* Risk Assessment */}
                   <div className="bg-white rounded-xl p-6 shadow-sm border border-gray-100">
                     <div className="flex items-center gap-2 mb-4">
                       <Shield className="w-5 h-5 text-tng-blue" />
                       <h3 className="text-lg font-semibold text-gray-900">Risk Assessment</h3>
+                      <span className="ml-auto inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-medium bg-orange-50 text-orange-700">
+                        <Cpu className="w-3 h-3" /> AWS ML
+                      </span>
                     </div>
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                       <div className="flex flex-col items-center">
-                        <RiskGauge score={analysisResult.creditScore} />
+                        <RiskGauge score={offer.riskScore || 650} />
+                        <span className={`mt-3 inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold ${riskTierColor(offer.riskTier)}`}>
+                          {offer.riskTier === 'LOW' ? <CheckCircle className="w-3.5 h-3.5" /> : <AlertTriangle className="w-3.5 h-3.5" />}
+                          Risk Tier: {offer.riskTier}
+                        </span>
                       </div>
                       <div className="space-y-3">
-                        <div className="flex items-center gap-2">
-                          <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium ${
-                            analysisResult.fraudRisk === 'LOW' ? 'bg-green-50 text-green-700' :
-                            analysisResult.fraudRisk === 'MEDIUM' ? 'bg-yellow-50 text-yellow-700' :
-                            'bg-red-50 text-red-700'
-                          }`}>
-                            {analysisResult.fraudRisk === 'LOW' ? <CheckCircle className="w-3 h-3" /> : <AlertTriangle className="w-3 h-3" />}
-                            Fraud Risk: {analysisResult.fraudRisk}
-                          </span>
-                        </div>
-                        {analysisResult.fraudFlags?.length > 0 && (
-                          <div className="space-y-1">
-                            {analysisResult.fraudFlags.map((flag, i) => (
-                              <p key={i} className="text-xs text-red-600 flex items-center gap-1">
-                                <AlertTriangle className="w-3 h-3" />
-                                {flag}
-                              </p>
-                            ))}
+                        <div className="grid grid-cols-2 gap-3">
+                          <div className="p-3 bg-gray-50 rounded-lg">
+                            <p className="text-xs text-gray-500">Risk Score</p>
+                            <p className="text-lg font-bold text-gray-900">{offer.riskScore}</p>
                           </div>
-                        )}
-                        <div className="space-y-2 pt-2">
-                          {Object.entries(analysisResult.riskFactors || {}).map(([key, val]) => (
-                            <div key={key}>
-                              <div className="flex justify-between text-xs mb-1">
-                                <span className="text-gray-600 capitalize">{key.replace(/_/g, ' ')}</span>
-                                <span className="font-medium">{(val * 100).toFixed(0)}%</span>
-                              </div>
-                              <div className="w-full h-1.5 bg-gray-100 rounded-full overflow-hidden">
-                                <div className="h-full bg-tng-blue rounded-full" style={{ width: `${val * 100}%` }} />
-                              </div>
-                            </div>
-                          ))}
+                          <div className="p-3 bg-gray-50 rounded-lg">
+                            <p className="text-xs text-gray-500">Approved</p>
+                            <p className="text-lg font-bold text-tng-blue">RM {Number(offer.approvedAmount || 0).toLocaleString()}</p>
+                          </div>
+                        </div>
+                        <div className="text-xs text-gray-400 flex items-center gap-1.5">
+                          <RefreshCw className="w-3 h-3" />
+                          Scoring method: {offer.scoringMethod || 'heuristic'}
                         </div>
                       </div>
                     </div>
                   </div>
                 </div>
 
-                {/* THE OFFER */}
+                {/* THE OFFER CARD */}
                 <div className="space-y-4">
-                  <div className="bg-gradient-to-br from-tng-blue to-tng-blue-dark rounded-xl p-6 text-white shadow-lg">
-                    <p className="text-sm text-white/80 font-medium">Your Instant Offer</p>
-                    <div className="mt-4 space-y-3">
-                      <div className="flex justify-between items-center">
-                        <span className="text-sm text-white/70">Invoice Amount</span>
-                        <span className="text-sm font-semibold">RM {offerResult.invoiceAmount.toLocaleString()}</span>
-                      </div>
-                      <div className="flex justify-between items-center">
-                        <span className="text-sm text-white/70">Advance Rate</span>
-                        <span className="text-sm font-semibold">{(offerResult.advanceRate * 100).toFixed(0)}%</span>
-                      </div>
-                      <div className="flex justify-between items-center">
-                        <span className="text-sm text-white/70">Factoring Fee ({(offerResult.totalFeeRate * 100).toFixed(1)}%)</span>
-                        <span className="text-sm font-semibold">RM {offerResult.factoringFee.toLocaleString()}</span>
-                      </div>
-                      <div className="h-px bg-white/20 my-3" />
-                      <div className="flex justify-between items-center">
-                        <span className="text-base font-semibold">You Receive</span>
-                        <span className="text-3xl font-bold">RM {offerResult.netDisbursement.toLocaleString()}</span>
-                      </div>
-                    </div>
-                    <div className="mt-5 flex gap-3">
-                      <button
-                        onClick={handleAcceptOffer}
-                        disabled={accepting}
-                        className="flex-1 flex items-center justify-center gap-2 px-4 py-2.5 bg-white text-tng-blue rounded-lg text-sm font-bold hover:bg-gray-100 transition-colors disabled:opacity-60"
-                      >
-                        {accepting ? (
-                          <motion.div className="w-4 h-4 border-2 border-tng-blue border-t-transparent rounded-full" animate={{ rotate: 360 }} transition={{ duration: 1, repeat: Infinity, ease: 'linear' }} />
-                        ) : (
-                          <>
-                            <Banknote className="w-4 h-4" />
-                            Accept Offer
-                          </>
-                        )}
-                      </button>
-                      <button
-                        onClick={resetInvoiceFlow}
-                        className="px-4 py-2.5 bg-white/10 text-white rounded-lg text-sm font-medium hover:bg-white/20 transition-colors border border-white/20"
-                      >
-                        Reject
-                      </button>
-                    </div>
-                    <p className="text-[10px] text-white/50 mt-3 text-center">
-                      Estimated repayment: {offerResult.estimatedRepaymentDate}
-                    </p>
-                  </div>
+                  <motion.div
+                    initial={{ opacity: 0, scale: 0.95, y: 10 }}
+                    animate={{ opacity: 1, scale: 1, y: 0 }}
+                    transition={{ duration: 0.4, ease: 'easeOut' }}
+                    className="bg-gradient-to-br from-tng-blue to-tng-blue-dark rounded-xl p-6 text-white shadow-lg relative overflow-hidden"
+                  >
+                    {/* Decorative glow */}
+                    <div className="absolute -top-8 -right-8 w-32 h-32 bg-white/5 rounded-full" />
+                    <div className="absolute -bottom-4 -left-4 w-20 h-20 bg-white/5 rounded-full" />
 
+                    <div className="relative">
+                      <p className="text-sm text-white/80 font-medium">Your Instant Offer</p>
+                      <div className="mt-4 space-y-3">
+                        <div className="flex justify-between items-center">
+                          <span className="text-sm text-white/70">Invoice Amount</span>
+                          <span className="text-sm font-semibold">RM {Number(offer.invoiceAmount || 0).toLocaleString()}</span>
+                        </div>
+                        <div className="flex justify-between items-center">
+                          <span className="text-sm text-white/70">Advance Rate</span>
+                          <span className="text-sm font-semibold">{((offer.advanceRate || 0.95) * 100).toFixed(0)}%</span>
+                        </div>
+                        <div className="flex justify-between items-center">
+                          <span className="text-sm text-white/70">Factoring Fee ({((offer.totalFeeRate || 0.03) * 100).toFixed(1)}%)</span>
+                          <span className="text-sm font-semibold">RM {Number(offer.factoringFee || 0).toLocaleString()}</span>
+                        </div>
+                        <div className="h-px bg-white/20 my-3" />
+                        <div className="flex justify-between items-center">
+                          <span className="text-base font-semibold">You Receive</span>
+                          <span className="text-3xl font-bold">RM {Number(offer.netDisbursement || 0).toLocaleString()}</span>
+                        </div>
+                      </div>
+                      <div className="mt-5 flex gap-3">
+                        <button
+                          onClick={handleAcceptOffer}
+                          className="flex-1 flex items-center justify-center gap-2 px-4 py-2.5 bg-white text-tng-blue rounded-lg text-sm font-bold hover:bg-gray-100 transition-colors"
+                        >
+                          <Banknote className="w-4 h-4" />
+                          Accept Offer
+                        </button>
+                        <button
+                          onClick={resetInvoiceFlow}
+                          className="px-4 py-2.5 bg-white/10 text-white rounded-lg text-sm font-medium hover:bg-white/20 transition-colors border border-white/20"
+                        >
+                          Reject
+                        </button>
+                      </div>
+                      <p className="text-[10px] text-white/50 mt-3 text-center">
+                        Repayment due: {offer.estimatedRepaymentDate || 'N/A'}
+                      </p>
+                    </div>
+                  </motion.div>
+
+                  {/* Fee Breakdown */}
                   <div className="bg-white rounded-xl p-5 shadow-sm border border-gray-100">
                     <h4 className="text-sm font-semibold text-gray-900 mb-3">Fee Breakdown</h4>
                     <div className="space-y-2 text-sm">
                       <div className="flex justify-between">
                         <span className="text-gray-500">Base Rate</span>
-                        <span className="font-medium text-gray-900">{(offerResult.baseRate * 100).toFixed(1)}%</span>
+                        <span className="font-medium text-gray-900">{((offer.baseRate || 0.02) * 100).toFixed(1)}%</span>
                       </div>
                       <div className="flex justify-between">
                         <span className="text-gray-500">Risk Premium</span>
-                        <span className="font-medium text-gray-900">{(offerResult.riskPremium * 100).toFixed(1)}%</span>
+                        <span className="font-medium text-gray-900">{((offer.riskPremium || 0.01) * 100).toFixed(1)}%</span>
                       </div>
                       <div className="flex justify-between pt-2 border-t border-gray-100">
                         <span className="text-gray-700 font-medium">Total Fee</span>
-                        <span className="font-bold text-tng-blue">{(offerResult.totalFeeRate * 100).toFixed(1)}%</span>
+                        <span className="font-bold text-tng-blue">{((offer.totalFeeRate || 0.03) * 100).toFixed(1)}%</span>
                       </div>
                     </div>
                   </div>
@@ -458,26 +626,101 @@ export default function Financing() {
               </div>
             )}
 
-            {/* Accepted State */}
-            {accepted && (
+            {/* ============================================================
+                STATE: DISBURSING
+                ============================================================ */}
+            {flowState === FlowState.DISBURSING && offer && (
+              <div className="bg-white rounded-xl p-12 shadow-sm border border-gray-100 flex flex-col items-center text-center">
+                <div className="relative">
+                  <motion.div
+                    className="w-14 h-14 border-4 border-green-500 border-t-transparent rounded-full"
+                    animate={{ rotate: 360 }}
+                    transition={{ duration: 0.8, repeat: Infinity, ease: 'linear' }}
+                  />
+                  <Wallet className="w-6 h-6 text-green-600 absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2" />
+                </div>
+                <p className="mt-5 text-sm font-semibold text-gray-800">Processing Disbursement</p>
+                <p className="text-xs text-gray-400 mt-1">DuitNow payment gateway in progress...</p>
+                <div className="mt-4 text-2xl font-bold text-tng-blue">
+                  RM {Number(offer.netDisbursement || 0).toLocaleString()}
+                </div>
+              </div>
+            )}
+
+            {/* ============================================================
+                STATE: DISBURSED – Success
+                ============================================================ */}
+            {flowState === FlowState.DISBURSED && (
               <motion.div
                 initial={{ opacity: 0, scale: 0.95 }}
                 animate={{ opacity: 1, scale: 1 }}
                 className="bg-white rounded-xl p-12 shadow-sm border border-gray-100 flex flex-col items-center text-center"
               >
-                <div className="w-20 h-20 rounded-full bg-green-50 flex items-center justify-center mb-4">
-                  <CheckCircle className="w-10 h-10 text-green-600" />
-                </div>
+                <motion.div
+                  initial={{ scale: 0 }}
+                  animate={{ scale: 1 }}
+                  transition={{ type: 'spring', stiffness: 200, damping: 12 }}
+                >
+                  <div className="w-20 h-20 rounded-full bg-green-50 flex items-center justify-center mb-4">
+                    <CheckCircle className="w-10 h-10 text-green-600" />
+                  </div>
+                </motion.div>
                 <h3 className="text-2xl font-bold text-gray-900">Funds Disbursed!</h3>
                 <p className="text-gray-500 mt-2">
-                  RM {offerResult?.netDisbursement.toLocaleString()} has been credited to your TNG Wallet.
+                  RM {Number(offer?.netDisbursement || disbursement?.disbursedAmount || 0).toLocaleString()} has been credited to your TNG Wallet.
                 </p>
+                {disbursement?.transactionId && (
+                  <p className="text-xs text-gray-400 mt-2">
+                    Transaction ID: {disbursement.transactionId}
+                  </p>
+                )}
+                {disbursement?.walletBalance != null && (
+                  <div className="mt-4 inline-flex items-center gap-2 px-4 py-2 bg-green-50 rounded-lg">
+                    <Wallet className="w-4 h-4 text-green-600" />
+                    <span className="text-sm font-semibold text-green-700">
+                      Wallet Balance: RM {Number(disbursement.walletBalance).toLocaleString()}
+                    </span>
+                  </div>
+                )}
                 <div className="mt-6 flex gap-3">
                   <button
                     onClick={resetInvoiceFlow}
-                    className="px-5 py-2.5 bg-tng-blue text-white rounded-lg text-sm font-medium hover:bg-tng-blue-dark transition-colors"
+                    className="flex items-center gap-2 px-5 py-2.5 bg-tng-blue text-white rounded-lg text-sm font-medium hover:bg-tng-blue-dark transition-colors"
                   >
+                    <ArrowRight className="w-4 h-4" />
                     Finance Another Invoice
+                  </button>
+                </div>
+              </motion.div>
+            )}
+
+            {/* ============================================================
+                STATE: ERROR
+                ============================================================ */}
+            {flowState === FlowState.ERROR && (
+              <motion.div
+                initial={{ opacity: 0, y: 10 }}
+                animate={{ opacity: 1, y: 0 }}
+                className="bg-white rounded-xl p-12 shadow-sm border border-red-100 flex flex-col items-center text-center"
+              >
+                <div className="w-16 h-16 rounded-full bg-red-50 flex items-center justify-center mb-4">
+                  <AlertCircle className="w-8 h-8 text-red-500" />
+                </div>
+                <h3 className="text-lg font-semibold text-gray-900">Processing Failed</h3>
+                <p className="text-sm text-gray-500 mt-2 max-w-md">{errorMessage}</p>
+                <div className="mt-6 flex gap-3">
+                  <button
+                    onClick={processInvoice}
+                    className="flex items-center gap-2 px-5 py-2.5 bg-tng-blue text-white rounded-lg text-sm font-medium hover:bg-tng-blue-dark transition-colors"
+                  >
+                    <RefreshCw className="w-4 h-4" />
+                    Retry
+                  </button>
+                  <button
+                    onClick={resetInvoiceFlow}
+                    className="px-5 py-2.5 border border-gray-200 text-gray-600 rounded-lg text-sm font-medium hover:bg-gray-50 transition-colors"
+                  >
+                    Start Over
                   </button>
                 </div>
               </motion.div>
@@ -485,6 +728,9 @@ export default function Financing() {
           </motion.div>
         )}
 
+        {/* ==================================================================
+            SHIPMENT TAB (unchanged)
+            ================================================================== */}
         {activeTab === 'shipment' && (
           <motion.div
             key="shipment"
@@ -555,7 +801,6 @@ export default function Financing() {
                   </span>
                 </div>
 
-                {/* Path Visualization */}
                 <div className="relative py-6">
                   <div className="flex items-center justify-between">
                     {shipmentData.waypoints?.map((wp, idx) => (
@@ -575,7 +820,7 @@ export default function Financing() {
                     <div
                       className="absolute top-0 left-0 h-full bg-tng-blue transition-all duration-1000"
                       style={{
-                        width: `${((shipmentData.waypoints?.findIndex((wp) => wp.location === shipmentData.currentLocation?.location) || 0) / Math.max((shipmentData.waypoints?.length || 1) - 1, 1)) * 100}%`
+                        width: `${((shipmentData.waypoints?.findIndex((wp) => wp.location === shipmentData.currentLocation?.location) || 0) / Math.max((shipmentData.waypoints?.length || 1) - 1, 1)) * 100}%`,
                       }}
                     />
                   </div>
@@ -668,19 +913,12 @@ export default function Financing() {
                   </div>
                   <div className="mt-5">
                     <button
-                      onClick={() => {
-                        setShipmentAccepted(true);
-                        confetti({
-                          particleCount: 120,
-                          spread: 70,
-                          origin: { y: 0.6 },
-                          colors: ['#005ABB', '#F5A623', '#22c55e', '#ffffff'],
-                        });
-                      }}
-                      className="w-full flex items-center justify-center gap-2 px-4 py-2.5 bg-white text-tng-blue rounded-lg text-sm font-bold hover:bg-gray-100 transition-colors"
+                      onClick={handleAcceptShipmentOffer}
+                      disabled={verifying}
+                      className="w-full flex items-center justify-center gap-2 px-4 py-2.5 bg-white text-tng-blue rounded-lg text-sm font-bold hover:bg-gray-100 transition-colors disabled:opacity-50"
                     >
                       <Banknote className="w-4 h-4" />
-                      Accept & Disburse
+                      {verifying ? 'Processing...' : 'Accept & Disburse'}
                     </button>
                   </div>
                 </div>

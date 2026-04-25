@@ -16,6 +16,7 @@ import {
   Menu,
   X,
   Sparkles,
+  UserCircle,
 } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 
@@ -28,6 +29,7 @@ const navItems = [
   { path: '/architecture', label: 'Architecture', icon: Network },
   { path: '/compliance', label: 'Compliance', icon: ShieldCheck },
   { path: '/assistant', label: 'AI Assistant', icon: MessageSquare },
+  { path: '/profile', label: 'Profile', icon: UserCircle },
 ];
 
 export default function Sidebar() {
