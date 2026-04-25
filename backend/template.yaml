@@ -635,7 +635,7 @@ Resources:
           INVOICES_TABLE: !Ref InvoicesTable
           OFFERS_TABLE: !Ref OffersTable
           S3_BUCKET: !Ref InvoiceUploadsBucket
-          SENDER_EMAIL: "outandin@gmail.com"
+          SENDER_EMAIL: "izteozx@gmail.com"
           SES_REGION: "ap-southeast-1"
           LOG_LEVEL: INFO
           ALLOWED_ORIGIN: !Ref AllowedOrigin

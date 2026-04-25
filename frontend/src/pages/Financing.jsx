@@ -140,10 +140,23 @@ function AgreementModal({ offerAmount, onAccept, onClose }) {
         >
           <p className="text-xs text-gray-400 uppercase tracking-wide font-semibold">Important &mdash; Please Read Carefully</p>
 
+          <a
+            href="/Out_In_TNC_Agreement.pdf"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="flex items-center gap-2 bg-blue-50 border border-blue-200 rounded-lg p-3 text-blue-800 hover:bg-blue-100 transition-colors"
+          >
+            <ExternalLink className="w-4 h-4 flex-shrink-0" />
+            <span className="text-xs font-medium">
+              View the complete <strong>Terms &amp; Conditions</strong> (PDF) for comprehensive agreement details.
+            </span>
+          </a>
+
           <p>
             By clicking &ldquo;I Accept&rdquo;, you (the Assignor) agree to be legally bound by this
             Receivables Assignment Agreement and all Terms and Conditions herein. This constitutes a
             legally binding contract between you and <strong>Out&In Sdn Bhd</strong>.
+            The summary below highlights key clauses; the PDF linked above contains the full agreement.
           </p>
 
           <div className="bg-blue-50 rounded-lg p-4 border border-blue-100">
@@ -199,7 +212,7 @@ function AgreementModal({ offerAmount, onAccept, onClose }) {
           </div>
 
           <p className="text-xs text-gray-400 text-center italic pt-2">
-            Scroll to the bottom to enable the Accept button.
+            Scroll to the bottom to enable the Accept button. Please review the full PDF for complete terms.
           </p>
         </div>
 
@@ -378,7 +391,7 @@ export default function Financing() {
       // Auto-send Notice of Assignment email to the buyer
       if (contactEmail || extractedData?.buyerName) {
         const emailParams = {
-          invoiceId: invoiceId || offer.offerId,
+          invoiceId: invoiceId || offer.invoiceId || offer.offerId,
           offerId: offer.offerId,
           buyerEmail: contactEmail || '',
           buyerCompanyName: extractedData?.buyerName || extractedData?.buyer_name || '',
@@ -389,9 +402,17 @@ export default function Financing() {
           currency: extractedData?.currency || 'RM',
         };
 
-        const emailResult = await sendAssignmentNotice(emailParams);
-        if (emailResult.status === 'SENT' || emailResult.status === 'QUEUED') {
-          setEmailSent(true);
+        try {
+          const emailResult = await sendAssignmentNotice(emailParams);
+          if (emailResult.status === 'SENT' || emailResult.status === 'QUEUED') {
+            setEmailSent(true);
+          } else {
+            console.warn('Assignment notice email failed:', emailResult.detail);
+            setErrorMessage(emailResult.detail || 'Email notification failed, but disbursement succeeded.');
+          }
+        } catch (emailErr) {
+          console.warn('Assignment notice email error:', emailErr.message);
+          setErrorMessage('Disbursement succeeded, but email notification failed.');
         }
       }
     } catch (err) {
@@ -873,7 +894,29 @@ export default function Financing() {
                       We will send an email to <strong>{contactEmail}</strong> confirming that the assignment of receivables in Malaysia is governed primarily by common law principles, as adopted under <strong>Section 3(1) of the Civil Law Act 1956</strong>, and is now assigned to <strong>OUT&IN</strong>.
                     </p>
                     <button
-                      onClick={() => setEmailSent(true)}
+                      onClick={async () => {
+                        const emailParams = {
+                          invoiceId: invoiceId || offer?.invoiceId || offer?.offerId,
+                          offerId: offer?.offerId,
+                          buyerEmail: contactEmail,
+                          buyerCompanyName: extractedData?.buyerName || extractedData?.buyer_name || '',
+                          smeCompanyName: extractedData?.merchantName || extractedData?.vendor_name || '',
+                          invoiceNumber: extractedData?.invoiceNumber || '',
+                          invoiceDate: extractedData?.issueDate || extractedData?.invoice_date || '',
+                          invoiceAmount: Number(extractedData?.extractedAmount || extractedData?.amount || offer?.invoiceAmount || 0),
+                          currency: extractedData?.currency || 'RM',
+                        };
+                        try {
+                          const result = await sendAssignmentNotice(emailParams);
+                          if (result.status === 'SENT' || result.status === 'QUEUED') {
+                            setEmailSent(true);
+                          } else {
+                            setErrorMessage(result.detail || 'Failed to send email.');
+                          }
+                        } catch (e) {
+                          setErrorMessage(e.friendlyMessage || 'Failed to send email.');
+                        }
+                      }}
                       className="mt-3 inline-flex items-center gap-1.5 px-3 py-1.5 bg-tng-blue text-white rounded-lg text-xs font-medium hover:bg-tng-blue-dark transition-colors"
                     >
                       <Mail className="w-3.5 h-3.5" />

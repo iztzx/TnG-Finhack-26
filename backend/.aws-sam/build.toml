@@ -45,4 +45,13 @@ manifest_hash = ""
 packagetype = "Zip"
 functions = ["ReconciliationFunction"]
 
+[function_build_definitions.23a48a4e-0e14-4e52-b3cc-f4eb4fcb2075]
+codeuri = "C:\\TNGFinhack26\\TnG-Finhack-26\\backend\\lambda\\send-email"
+runtime = "python3.12"
+architecture = "x86_64"
+handler = "handler.handler"
+manifest_hash = ""
+packagetype = "Zip"
+functions = ["SendEmailFunction"]
+
 [layer_build_definitions]

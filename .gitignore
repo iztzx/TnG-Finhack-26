@@ -25,6 +25,7 @@ Thumbs.db
 
 # Binaries & large files
 *.pdf
+!backend/lambda/send-email/Out_In_TNC_Agreement.pdf
 *.pyd
 
 # Vendored dependencies (Alibaba FC)

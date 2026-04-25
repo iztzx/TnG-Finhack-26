@@ -16,6 +16,7 @@ Standards:
 """
 
 import json
+import io
 import os
 import uuid
 import base64
@@ -30,6 +31,58 @@ from boto3.dynamodb.conditions import Attr
 from aws_lambda_powertools import Logger
 from aws_lambda_powertools.logging import correlation_paths
 from pydantic import BaseModel, Field, ValidationError
+
+
+# ===================================================================
+# PDF filling – stamp parsed invoice data onto the last page
+# ===================================================================
+
+def _fill_agreement(pdf_bytes: bytes, data: dict) -> bytes:
+    """Stamp the invoice details onto the last page of the agreement PDF."""
+    try:
+        from pypdf import PdfReader, PdfWriter
+        from pypdf.annotations import FreeText
+
+        reader = PdfReader(io.BytesIO(pdf_bytes))
+        writer = PdfWriter()
+
+        for page in reader.pages:
+            writer.add_page(page)
+
+        # Build the data text block
+        lines = []
+        if data.get("buyer_company_name"):
+            lines.append(f"Buyer: {data['buyer_company_name']}")
+        if data.get("sme_company_name"):
+            lines.append(f"Assignor (SME): {data['sme_company_name']}")
+        if data.get("invoice_number"):
+            lines.append(f"Invoice No: {data['invoice_number']}")
+        if data.get("invoice_date"):
+            lines.append(f"Invoice Date: {data['invoice_date']}")
+        if data.get("invoice_amount", 0):
+            currency = data.get("currency", "RM")
+            lines.append(f"Amount: {currency} {data['invoice_amount']:,.2f}")
+
+        data_text = "\n".join(lines)
+
+        annotation = FreeText(
+            text=data_text,
+            rect=(60, 200, 450, 460),
+        )
+        writer.add_annotation(
+            page_number=len(reader.pages) - 1,
+            annotation=annotation,
+        )
+
+        output = io.BytesIO()
+        writer.write(output)
+        logger.info("Agreement last page filled with invoice details")
+        return output.getvalue()
+
+    except Exception as exc:
+        logger.warning("PDF filling failed – sending unfilled template", extra={"error": str(exc)})
+        return pdf_bytes
+
 
 # ---------------------------------------------------------------------------
 # Structured logger
@@ -90,6 +143,23 @@ class SendEmailRequest(BaseModel):
     invoiceDate: Optional[str] = Field(None, description="Invoice date")
     invoiceAmount: Optional[float] = Field(None, description="Invoice amount")
     currency: Optional[str] = Field("RM", description="Currency code")
+
+
+# ===================================================================
+# Nested data helper – invoice-webhook stores fields inside extractedData
+# ===================================================================
+
+def _get_nested(invoice_item: dict, key: str, default=None):
+    """Look up a key at the top level; fall back to extractedData dict."""
+    if key in invoice_item:
+        return invoice_item[key]
+    extracted = invoice_item.get("extractedData") or {}
+    if isinstance(extracted, str):
+        try:
+            extracted = json.loads(extracted)
+        except (json.JSONDecodeError, TypeError):
+            extracted = {}
+    return extracted.get(key, default)
 
 
 # ===================================================================
@@ -371,7 +441,8 @@ def handler(event, context):
     currency = request.currency or "RM"
 
     # Try to fetch additional details from DynamoDB if not provided in request
-    if not buyer_email or buyer_company_name == "Valued Customer":
+    needs_lookup = not buyer_email or buyer_company_name == "Valued Customer"
+    if needs_lookup:
         try:
             # Try to look up the invoice in the Invoices table
             # The invoices table uses (id) as PK
@@ -381,7 +452,7 @@ def handler(event, context):
             if invoice_item:
                 if not buyer_email:
                     # Look up buyer email by buyerName in Users table
-                    buyer_name = invoice_item.get("buyerName", "")
+                    buyer_name = _get_nested(invoice_item, "buyerName", "")
                     if buyer_name:
                         buyer_company_name = buyer_name
                         # Scan users table for a matching companyName
@@ -398,16 +469,20 @@ def handler(event, context):
                             })
 
                 if not invoice_number or invoice_number == request.invoiceId:
-                    invoice_number = invoice_item.get("invoiceNumber", invoice_number)
+                    invoice_number = _get_nested(invoice_item, "invoiceNumber", invoice_number)
                 if not invoice_date or invoice_date == datetime.now(timezone.utc).strftime("%Y-%m-%d"):
-                    invoice_date = invoice_item.get("invoiceDate", invoice_date)
+                    invoice_date = _get_nested(invoice_item, "invoiceDate", invoice_date)
                 if not invoice_amount:
-                    raw_amount = invoice_item.get("amount", 0)
+                    raw_amount = _get_nested(invoice_item, "amount", 0)
                     invoice_amount = float(raw_amount)
                 if not sme_company_name or sme_company_name == "Assignor":
-                    sme_company_name = invoice_item.get("vendorName", sme_company_name)
+                    sme_company_name = _get_nested(invoice_item, "vendorName", sme_company_name)
+                    if not sme_company_name:
+                        sme_company_name = _get_nested(invoice_item, "sellerName", sme_company_name)
+                        if not sme_company_name:
+                            sme_company_name = _get_nested(invoice_item, "merchantName", sme_company_name)
                 if not currency or currency == "RM":
-                    currency = invoice_item.get("currency", currency)
+                    currency = _get_nested(invoice_item, "currency", currency)
 
         except Exception as exc:
             logger.warning("Failed to look up invoice/buyer in DynamoDB – using request data", extra={
@@ -473,26 +548,51 @@ def handler(event, context):
         msg_body.attach(MIMEText(html_body, "html", "utf-8"))
         msg.attach(msg_body)
 
-        # Try to attach the agreement PDF from S3 if bucket is configured
+        # Attach the agreement PDF – local file bundled with Lambda, fallback to S3
         pdf_attached = False
-        if S3_BUCKET:
+        pdf_data = None
+
+        # 1) Try local file (bundled in Lambda package)
+        local_pdf_path = os.path.join(os.path.dirname(__file__), "Out_In_TNC_Agreement.pdf")
+        if os.path.isfile(local_pdf_path):
+            try:
+                with open(local_pdf_path, "rb") as f:
+                    pdf_data = f.read()
+                pdf_attached = True
+                logger.info("Agreement PDF read from local Lambda bundle", extra={"sizeBytes": len(pdf_data)})
+            except Exception as local_exc:
+                logger.warning("Failed to read local PDF", extra={"error": str(local_exc)})
+
+        # 2) Fallback to S3
+        if not pdf_attached and S3_BUCKET:
             try:
                 pdf_key = "agreements/Out_In_TNC_Agreement_Professional.pdf"
                 pdf_obj = s3_client.get_object(Bucket=S3_BUCKET, Key=pdf_key)
                 pdf_data = pdf_obj["Body"].read()
-
-                attachment = MIMEApplication(pdf_data)
-                attachment.add_header(
-                    "Content-Disposition", "attachment",
-                    filename="Out_In_Receivables_Assignment_Agreement.pdf",
-                )
-                msg.attach(attachment)
                 pdf_attached = True
-                logger.info("Agreement PDF attached from S3", extra={"bucket": S3_BUCKET, "key": pdf_key})
+                logger.info("Agreement PDF read from S3", extra={"bucket": S3_BUCKET, "key": pdf_key})
             except Exception as s3_exc:
-                logger.warning("Could not attach PDF from S3 – sending without attachment", extra={
-                    "error": str(s3_exc),
-                })
+                logger.warning("Could not read PDF from S3", extra={"error": str(s3_exc)})
+
+        if pdf_attached and pdf_data:
+            # Fill the last page with parsed invoice data
+            filled_pdf = _fill_agreement(pdf_data, {
+                "buyer_company_name": buyer_company_name,
+                "sme_company_name": sme_company_name,
+                "invoice_number": invoice_number,
+                "invoice_date": invoice_date,
+                "invoice_amount": invoice_amount,
+                "currency": currency,
+            })
+            attachment = MIMEApplication(filled_pdf)
+            attachment.add_header(
+                "Content-Disposition", "attachment",
+                filename="Out_In_Receivables_Assignment_Agreement.pdf",
+            )
+            msg.attach(attachment)
+            logger.info("Agreement PDF attached to email")
+        elif S3_BUCKET:
+            logger.warning("Could not attach PDF from either local or S3 – sending without attachment")
 
         # Send via SES raw email (supports attachments)
         ses_response = ses_client.send_raw_email(

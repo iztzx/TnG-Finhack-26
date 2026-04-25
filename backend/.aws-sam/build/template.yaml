@@ -390,6 +390,13 @@ Resources:
             Method: POST
             RestApiId:
               Ref: TnGApiGateway
+        AuthUpdateProfile:
+          Type: Api
+          Properties:
+            Path: /api/auth/profile
+            Method: PUT
+            RestApiId:
+              Ref: TnGApiGateway
     Metadata:
       SamResourceId: AuthFunction
   ScoringFunction:
@@ -721,6 +728,103 @@ Resources:
             - Fn::GetAtt:
               - LegacyTransactionsTable
               - Arn
+  SendEmailFunction:
+    Type: AWS::Serverless::Function
+    Description: Sends Notice of Assignment emails to buyers when SMEs accept financing
+      offers. Looks up buyer info from DynamoDB, composes professional email via SES,
+      and attaches the agreement PDF.
+    Properties:
+      FunctionName:
+        Fn::Sub: tng-finhack-${Environment}-send-email
+      Handler: handler.handler
+      CodeUri: SendEmailFunction
+      Role:
+        Fn::GetAtt:
+        - SendEmailFunctionRole
+        - Arn
+      Environment:
+        Variables:
+          USERS_TABLE:
+            Ref: UsersTable
+          INVOICES_TABLE:
+            Ref: InvoicesTable
+          OFFERS_TABLE:
+            Ref: OffersTable
+          S3_BUCKET:
+            Ref: InvoiceUploadsBucket
+          SENDER_EMAIL: izteozx@gmail.com
+          SES_REGION: ap-southeast-1
+          LOG_LEVEL: INFO
+          ALLOWED_ORIGIN:
+            Ref: AllowedOrigin
+      Timeout: 30
+      MemorySize: 256
+      Events:
+        SendAssignmentNotice:
+          Type: Api
+          Properties:
+            Path: /api/email/send-assignment-notice
+            Method: POST
+            RestApiId:
+              Ref: TnGApiGateway
+    Metadata:
+      SamResourceId: SendEmailFunction
+  SendEmailFunctionRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName:
+        Fn::Sub: tng-finhack-${Environment}-send-email-role
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+        - Effect: Allow
+          Principal:
+            Service: lambda.amazonaws.com
+          Action: sts:AssumeRole
+      ManagedPolicyArns:
+      - arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole
+      Policies:
+      - PolicyName: SendEmailDynamoReadPolicy
+        PolicyDocument:
+          Version: '2012-10-17'
+          Statement:
+          - Sid: ReadUsersInvoicesOffers
+            Effect: Allow
+            Action:
+            - dynamodb:GetItem
+            - dynamodb:Scan
+            - dynamodb:Query
+            - dynamodb:UpdateItem
+            Resource:
+            - Fn::GetAtt:
+              - UsersTable
+              - Arn
+            - Fn::GetAtt:
+              - InvoicesTable
+              - Arn
+            - Fn::GetAtt:
+              - OffersTable
+              - Arn
+      - PolicyName: SendEmailSESPolicy
+        PolicyDocument:
+          Version: '2012-10-17'
+          Statement:
+          - Sid: SendEmails
+            Effect: Allow
+            Action:
+            - ses:SendEmail
+            - ses:SendRawEmail
+            Resource: '*'
+      - PolicyName: SendEmailS3ReadPolicy
+        PolicyDocument:
+          Version: '2012-10-17'
+          Statement:
+          - Sid: ReadAgreementPDF
+            Effect: Allow
+            Action:
+            - s3:GetObject
+            Resource:
+              Fn::Sub: ${InvoiceUploadsBucket.Arn}/*
 Outputs:
   InvoiceUploadsBucketName:
     Description: S3 bucket used for invoice uploads before OCR and underwriting.
@@ -754,3 +858,7 @@ Outputs:
     Description: DynamoDB table storing cashflow and financing transactions.
     Value:
       Ref: TransactionsTable
+  SendEmailApiUrl:
+    Description: URL for the auto-emailer endpoint (Notice of Assignment).
+    Value:
+      Fn::Sub: https://${TnGApiGateway}.execute-api.${AWS::Region}.amazonaws.com/${Environment}/api/email/send-assignment-notice

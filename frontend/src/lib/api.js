@@ -2,7 +2,6 @@ import axios from 'axios';
 import {
   API_BASE_URL,
   ALIBABA_FC_URL,
-  SUPPLYLINK_BACKEND_URL,
   SCORING_POLL_INTERVAL_MS,
   SCORING_POLL_MAX_ATTEMPTS,
   REQUEST_TIMEOUT_MS,
@@ -226,6 +225,7 @@ export async function getScoringOffer(invoiceId, { intervalMs, maxAttempts, onAt
       if (offer) {
         return {
           offerId: offer.offerId,
+          invoiceId: offer.invoiceId,
           riskScore: offer.riskScore ?? offer.creditScore,
           riskTier: offer.riskTier,
           approvedAmount: offer.approvedAmount,
