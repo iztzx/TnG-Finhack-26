@@ -111,3 +111,85 @@ a, button, input, select, textarea {
 ::selection {
   background: rgba(0, 90, 187, 0.16);
 }
+
+/* ===== Auth page animations ===== */
+@keyframes authFadeIn {
+  from { opacity: 0; transform: translateY(16px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes authSlideUp {
+  from { opacity: 0; transform: translateY(24px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes authScaleIn {
+  from { opacity: 0; transform: scale(0.92); }
+  to { opacity: 1; transform: scale(1); }
+}
+
+@keyframes shimmer {
+  0% { background-position: -200% 0; }
+  100% { background-position: 200% 0; }
+}
+
+@keyframes checkmark {
+  0% { stroke-dashoffset: 30; }
+  100% { stroke-dashoffset: 0; }
+}
+
+.auth-card {
+  animation: authFadeIn 0.5s ease-out both;
+}
+
+.auth-card-delay-1 {
+  animation: authFadeIn 0.5s ease-out 0.08s both;
+}
+
+.auth-card-delay-2 {
+  animation: authFadeIn 0.5s ease-out 0.16s both;
+}
+
+.auth-card-delay-3 {
+  animation: authFadeIn 0.5s ease-out 0.24s both;
+}
+
+.auth-step-enter {
+  animation: authSlideUp 0.35s ease-out both;
+}
+
+.auth-success-icon {
+  animation: authScaleIn 0.45s cubic-bezier(0.34, 1.56, 0.64, 1) both;
+}
+
+.auth-input {
+  background: rgba(255,255,255,0.06);
+  border: 1px solid rgba(255,255,255,0.12);
+  border-radius: 8px;
+  padding: 12px 14px;
+  color: white;
+  font-size: 14px;
+  width: 100%;
+  outline: none;
+  transition: border-color 0.2s, box-shadow 0.2s;
+}
+
+.auth-input:focus {
+  border-color: #2563EB;
+  box-shadow: 0 0 0 3px rgba(37,99,235,0.15);
+}
+
+.auth-input-error {
+  border-color: #EF4444 !important;
+  box-shadow: 0 0 0 3px rgba(239,68,68,0.12) !important;
+}
+
+.auth-input::placeholder {
+  color: rgba(255,255,255,0.3);
+}
+
+/* select/option dark dropdown fix */
+select.auth-input option {
+  background: #1a1a2e;
+  color: white;
+}

@@ -1,6 +1,10 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate, Link, useSearchParams } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
+import AuthLayout from '../components/auth/AuthLayout';
+
+const DEMO_SME = { email: 'user@pantasflow.com', password: 'Demo@123' };
+const DEMO_ADMIN = { email: 'admin@pantasflow.com', password: 'Admin@123' };
 
 const Login = () => {
   const [email, setEmail] = useState(() => localStorage.getItem('pf_remember_email') || '');
@@ -54,255 +58,241 @@ const Login = () => {
     }
   };
 
+  const fillDemo = (creds) => {
+    setEmail(creds.email);
+    setPassword(creds.password);
+    clearError();
+  };
+
   return (
-    <div className="min-h-screen flex items-center justify-center" style={{ background: 'linear-gradient(135deg, #0B0F1A 0%, #0F2A5C 50%, #0B0F1A 100%)' }}>
-      <div
-        className="relative z-10 flex flex-col"
-        style={{
-          background: 'rgba(255,255,255,0.04)',
-          border: '1px solid rgba(255,255,255,0.08)',
-          borderRadius: '20px',
-          padding: '40px',
-          width: '420px',
-          backdropFilter: 'blur(20px)',
-        }}
-      >
-        {/* Logo */}
-        <div className="flex items-center gap-3">
-          <div className="w-7 h-7 bg-[#2563EB] rounded flex items-center justify-center">
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-              <path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5" stroke="white" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
-            </svg>
-          </div>
-          <span style={{ color: 'white', fontWeight: 600, fontSize: '18px' }}>PantasFlow</span>
+    <AuthLayout>
+      {/* Logo + brand */}
+      <div className="auth-card-delay-1 flex items-center gap-3">
+        <div className="w-8 h-8 bg-[#2563EB] rounded-lg flex items-center justify-center">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+            <path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5" stroke="white" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+          </svg>
+        </div>
+        <span style={{ color: 'white', fontWeight: 700, fontSize: '18px', letterSpacing: '-0.01em' }}>PantasFlow</span>
+      </div>
+
+      <h2 className="auth-card-delay-1" style={{ fontSize: '24px', fontWeight: 700, color: 'white', marginTop: '28px', marginBottom: '6px' }}>
+        Welcome back
+      </h2>
+      <p className="auth-card-delay-2" style={{ fontSize: '14px', color: 'rgba(255,255,255,0.5)', marginBottom: '32px' }}>
+        Sign in to your SME financing account
+      </p>
+
+      {/* Session expired banner */}
+      {sessionExpired && (
+        <div className="auth-card-delay-2" style={{ background: 'rgba(234,179,8,0.1)', border: '1px solid rgba(234,179,8,0.3)', borderRadius: '8px', padding: '10px 14px', fontSize: '13px', color: '#FDE68A', display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '16px' }}>
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+            <circle cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="2"/>
+            <path d="M12 8v4m0 4h.01" stroke="currentColor" strokeWidth="2" strokeLinecap="round"/>
+          </svg>
+          Your session has expired. Please sign in again.
+        </div>
+      )}
+
+      <form onSubmit={handleLogin} className="auth-card-delay-2 flex flex-col gap-5">
+        {/* Email */}
+        <div className="flex flex-col gap-1.5">
+          <label htmlFor="email" style={{ fontSize: '13px', fontWeight: 500, color: 'rgba(255,255,255,0.7)' }}>
+            Email address
+          </label>
+          <input
+            id="email"
+            type="email"
+            required
+            autoComplete="email"
+            value={email}
+            onChange={(e) => setEmail(e.target.value)}
+            placeholder="you@company.com"
+            className="auth-input"
+          />
         </div>
 
-        <h2 style={{ fontSize: '24px', fontWeight: 700, color: 'white', marginTop: '24px', marginBottom: '8px' }}>
-          Welcome back
-        </h2>
-        <p style={{ fontSize: '14px', color: 'rgba(255,255,255,0.5)', marginBottom: '32px' }}>
-          Sign in to your account
-        </p>
+        {/* Password */}
+        <div className="flex flex-col gap-1.5 relative">
+          <div className="flex items-center justify-between">
+            <label htmlFor="password" style={{ fontSize: '13px', fontWeight: 500, color: 'rgba(255,255,255,0.7)' }}>
+              Password
+            </label>
+            <span
+              style={{ fontSize: '12px', color: '#60A5FA', cursor: 'pointer' }}
+              title="Contact your administrator to reset your password"
+            >
+              Forgot password?
+            </span>
+          </div>
 
-        {/* Session expired banner */}
-        {sessionExpired && (
-          <div style={{ background: 'rgba(234,179,8,0.1)', border: '1px solid rgba(234,179,8,0.3)', borderRadius: '8px', padding: '10px 14px', fontSize: '13px', color: '#FDE68A', display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '16px' }}>
+          <div className="relative">
+            <input
+              id="password"
+              type={showPassword ? 'text' : 'password'}
+              required
+              autoComplete="current-password"
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+              placeholder="Enter your password"
+              className="auth-input"
+              style={{ paddingRight: '40px' }}
+            />
+            <button
+              type="button"
+              onClick={() => setShowPassword(!showPassword)}
+              className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-300"
+              aria-label={showPassword ? 'Hide password' : 'Show password'}
+            >
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                {showPassword ? (
+                  <path d="M17.94 17.94A10.07 10.07 0 0112 20c-7 0-11-8-11-8a18.45 18.45 0 015.06-5.94M9.9 4.24A9.12 9.12 0 0112 4c7 0 11 8 11 8a18.5 18.5 0 01-2.16 3.19m-6.72-1.07a3 3 0 11-4.24-4.24m1.42 1.42L3 3m18 18l-6.86-6.86" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+                ) : (
+                  <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z M12 15a3 3 0 100-6 3 3 0 000 6z" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+                )}
+              </svg>
+            </button>
+          </div>
+        </div>
+
+        {/* Remember me */}
+        <label className="flex items-center gap-2 cursor-pointer">
+          <input
+            type="checkbox"
+            checked={rememberMe}
+            onChange={(e) => setRememberMe(e.target.checked)}
+            className="w-4 h-4 rounded border-gray-300 bg-transparent text-blue-600 focus:ring-blue-500"
+          />
+          <span style={{ fontSize: '13px', color: 'rgba(255,255,255,0.6)' }}>Remember me</span>
+        </label>
+
+        {/* Error */}
+        {error && (
+          <div style={{ background: 'rgba(220,38,38,0.1)', border: '1px solid rgba(220,38,38,0.3)', borderRadius: '8px', padding: '10px 14px', fontSize: '13px', color: '#FCA5A5', display: 'flex', alignItems: 'center', gap: '8px' }}>
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
               <circle cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="2"/>
               <path d="M12 8v4m0 4h.01" stroke="currentColor" strokeWidth="2" strokeLinecap="round"/>
             </svg>
-            Your session has expired. Please sign in again.
+            <span>{error}</span>
           </div>
         )}
 
-        <form onSubmit={handleLogin} className="flex flex-col gap-5">
-          {/* Email */}
-          <div className="flex flex-col gap-1.5">
-            <label htmlFor="email" style={{ fontSize: '13px', fontWeight: 500, color: 'rgba(255,255,255,0.7)' }}>
-              Email address
-            </label>
-            <input
-              id="email"
-              type="email"
-              required
-              autoComplete="email"
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
-              placeholder="you@company.com"
-              style={{
-                background: 'rgba(255,255,255,0.06)',
-                border: '1px solid rgba(255,255,255,0.12)',
-                borderRadius: '8px',
-                padding: '12px 14px',
-                color: 'white',
-                fontSize: '14px',
-                width: '100%',
-                outline: 'none',
-                transition: 'all 0.2s',
-              }}
-              onFocus={(e) => { e.currentTarget.style.borderColor = '#2563EB'; e.currentTarget.style.boxShadow = '0 0 0 3px rgba(37,99,235,0.15)'; }}
-              onBlur={(e) => { e.currentTarget.style.borderColor = 'rgba(255,255,255,0.12)'; e.currentTarget.style.boxShadow = 'none'; }}
-            />
+        {/* Rate limit warning */}
+        {cooldown > 0 && (
+          <div style={{ background: 'rgba(234,179,8,0.1)', border: '1px solid rgba(234,179,8,0.3)', borderRadius: '8px', padding: '10px 14px', fontSize: '13px', color: '#FDE68A', textAlign: 'center' }}>
+            Too many failed attempts. Please wait {cooldown}s before trying again.
           </div>
+        )}
 
-          {/* Password */}
-          <div className="flex flex-col gap-1.5 relative">
-            <div className="flex items-center justify-between">
-              <label htmlFor="password" style={{ fontSize: '13px', fontWeight: 500, color: 'rgba(255,255,255,0.7)' }}>
-                Password
-              </label>
-              <span
-                style={{ fontSize: '12px', color: '#60A5FA', cursor: 'pointer' }}
-                title="Contact your administrator to reset your password"
-              >
-                Forgot password?
-              </span>
-            </div>
+        {/* Submit */}
+        <button
+          type="submit"
+          disabled={isLoading || cooldown > 0}
+          style={{
+            width: '100%',
+            background: cooldown > 0 ? '#6B7280' : '#2563EB',
+            color: 'white',
+            borderRadius: '10px',
+            padding: '13px',
+            fontSize: '15px',
+            fontWeight: 700,
+            border: 'none',
+            cursor: isLoading || cooldown > 0 ? 'not-allowed' : 'pointer',
+            transition: 'all 200ms ease',
+            opacity: isLoading ? 0.7 : 1,
+            marginTop: '8px',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            gap: '8px',
+          }}
+          onMouseOver={(e) => { if (!isLoading && cooldown <= 0) { e.currentTarget.style.background = '#1D4ED8'; } }}
+          onMouseOut={(e) => { if (!isLoading && cooldown <= 0) { e.currentTarget.style.background = '#2563EB'; } }}
+        >
+          {isLoading ? (
+            <>
+              <span className="w-[18px] h-[18px] border-2 border-white border-t-transparent rounded-full animate-spin"></span>
+              Signing in...
+            </>
+          ) : 'Sign In'}
+        </button>
+      </form>
 
-            <div className="relative">
-              <input
-                id="password"
-                type={showPassword ? 'text' : 'password'}
-                required
-                autoComplete="current-password"
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                placeholder="Enter your password"
-                style={{
-                  background: 'rgba(255,255,255,0.06)',
-                  border: '1px solid rgba(255,255,255,0.12)',
-                  borderRadius: '8px',
-                  padding: '12px 14px',
-                  paddingRight: '40px',
-                  color: 'white',
-                  fontSize: '14px',
-                  width: '100%',
-                  outline: 'none',
-                  transition: 'all 0.2s',
-                }}
-                onFocus={(e) => { e.currentTarget.style.borderColor = '#2563EB'; e.currentTarget.style.boxShadow = '0 0 0 3px rgba(37,99,235,0.15)'; }}
-                onBlur={(e) => { e.currentTarget.style.borderColor = 'rgba(255,255,255,0.12)'; e.currentTarget.style.boxShadow = 'none'; }}
-              />
-              <button
-                type="button"
-                onClick={() => setShowPassword(!showPassword)}
-                className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-300"
-                aria-label={showPassword ? 'Hide password' : 'Show password'}
-              >
-                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-                  {showPassword ? (
-                    <path d="M17.94 17.94A10.07 10.07 0 0112 20c-7 0-11-8-11-8a18.45 18.45 0 015.06-5.94M9.9 4.24A9.12 9.12 0 0112 4c7 0 11 8 11 8a18.5 18.5 0 01-2.16 3.19m-6.72-1.07a3 3 0 11-4.24-4.24m1.42 1.42L3 3m18 18l-6.86-6.86" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
-                  ) : (
-                    <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z M12 15a3 3 0 100-6 3 3 0 000 6z" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
-                  )}
-                </svg>
-              </button>
-            </div>
-          </div>
+      {/* Divider */}
+      <div className="auth-card-delay-3" style={{ margin: '24px 0', borderTop: '1px solid rgba(255,255,255,0.08)' }}></div>
 
-          {/* Remember me */}
-          <label className="flex items-center gap-2 cursor-pointer">
-            <input
-              type="checkbox"
-              checked={rememberMe}
-              onChange={(e) => setRememberMe(e.target.checked)}
-              className="w-4 h-4 rounded border-gray-300 bg-transparent text-blue-600 focus:ring-blue-500"
-            />
-            <span style={{ fontSize: '13px', color: 'rgba(255,255,255,0.6)' }}>Remember me</span>
-          </label>
-
-          {/* Error */}
-          {error && (
-            <div style={{ background: 'rgba(220,38,38,0.1)', border: '1px solid rgba(220,38,38,0.3)', borderRadius: '8px', padding: '10px 14px', fontSize: '13px', color: '#FCA5A5', display: 'flex', alignItems: 'center', gap: '8px' }}>
-              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-                <circle cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="2"/>
-                <path d="M12 8v4m0 4h.01" stroke="currentColor" strokeWidth="2" strokeLinecap="round"/>
-              </svg>
-              <span>{error}</span>
-            </div>
-          )}
-
-          {/* Rate limit warning */}
-          {cooldown > 0 && (
-            <div style={{ background: 'rgba(234,179,8,0.1)', border: '1px solid rgba(234,179,8,0.3)', borderRadius: '8px', padding: '10px 14px', fontSize: '13px', color: '#FDE68A', textAlign: 'center' }}>
-              Too many failed attempts. Please wait {cooldown}s before trying again.
-            </div>
-          )}
-
-          {/* Submit */}
+      {/* Demo accounts - refined */}
+      <div className="auth-card-delay-3" style={{ padding: '14px', background: 'rgba(59,130,246,0.06)', border: '1px solid rgba(59,130,246,0.12)', borderRadius: '12px' }}>
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '10px' }}>
+          <p style={{ fontSize: '11px', color: 'rgba(255,255,255,0.4)', textTransform: 'uppercase', letterSpacing: '0.6px', fontWeight: 600 }}>Quick Demo</p>
+          <span style={{ fontSize: '10px', color: 'rgba(255,255,255,0.25)', background: 'rgba(255,255,255,0.06)', padding: '2px 8px', borderRadius: '4px' }}>Pre-filled</span>
+        </div>
+        <div style={{ display: 'flex', gap: '8px' }}>
           <button
-            type="submit"
-            disabled={isLoading || cooldown > 0}
+            type="button"
+            onClick={() => fillDemo(DEMO_SME)}
+            disabled={isLoading}
             style={{
-              width: '100%',
-              background: cooldown > 0 ? '#6B7280' : '#2563EB',
-              color: 'white',
-              borderRadius: '10px',
-              padding: '13px',
-              fontSize: '15px',
-              fontWeight: 700,
-              border: 'none',
-              cursor: isLoading || cooldown > 0 ? 'not-allowed' : 'pointer',
-              transition: 'all 200ms ease',
-              opacity: isLoading ? 0.7 : 1,
-              marginTop: '8px',
+              flex: 1,
+              fontSize: '12px',
+              padding: '10px 12px',
+              background: 'rgba(34,197,94,0.08)',
+              border: '1px solid rgba(34,197,94,0.2)',
+              borderRadius: '8px',
+              color: 'rgba(255,255,255,0.85)',
+              cursor: isLoading ? 'not-allowed' : 'pointer',
+              transition: 'all 0.2s',
               display: 'flex',
               alignItems: 'center',
               justifyContent: 'center',
-              gap: '8px',
+              gap: '6px',
             }}
-            onMouseOver={(e) => { if (!isLoading && cooldown <= 0) { e.currentTarget.style.background = '#1D4ED8'; e.currentTarget.style.transform = 'translateY(-1px)'; } }}
-            onMouseOut={(e) => { if (!isLoading && cooldown <= 0) { e.currentTarget.style.background = '#2563EB'; e.currentTarget.style.transform = 'none'; } }}
           >
-            {isLoading ? (
-              <>
-                <span className="w-[18px] h-[18px] border-2 border-white border-t-transparent rounded-full animate-spin"></span>
-                Signing in...
-              </>
-            ) : 'Sign In'}
+            <span style={{ width: '6px', height: '6px', borderRadius: '50%', background: '#22C55E', flexShrink: 0 }}></span>
+            SME User
           </button>
-        </form>
-
-        {/* Divider */}
-        <div style={{ margin: '24px 0', borderTop: '1px solid rgba(255,255,255,0.08)' }}></div>
-
-        {/* Demo accounts */}
-        <div style={{ padding: '12px', background: 'rgba(59,130,246,0.08)', border: '1px solid rgba(59,130,246,0.15)', borderRadius: '10px' }}>
-          <p style={{ fontSize: '11px', color: 'rgba(255,255,255,0.4)', marginBottom: '8px', textTransform: 'uppercase', letterSpacing: '0.5px' }}>Demo Accounts</p>
-          <div style={{ display: 'flex', gap: '8px' }}>
-            <button
-              type="button"
-              onClick={() => { setEmail('user@pantasflow.com'); setPassword('Demo@123'); }}
-              disabled={isLoading}
-              style={{
-                flex: 1,
-                fontSize: '12px',
-                padding: '8px 10px',
-                background: 'rgba(255,255,255,0.06)',
-                border: '1px solid rgba(255,255,255,0.12)',
-                borderRadius: '8px',
-                color: 'rgba(255,255,255,0.8)',
-                cursor: isLoading ? 'not-allowed' : 'pointer',
-                transition: 'all 0.2s',
-              }}
-            >
-              SME User
-            </button>
-            <button
-              type="button"
-              onClick={() => { setEmail('admin@pantasflow.com'); setPassword('Admin@123'); }}
-              disabled={isLoading}
-              style={{
-                flex: 1,
-                fontSize: '12px',
-                padding: '8px 10px',
-                background: 'rgba(255,255,255,0.06)',
-                border: '1px solid rgba(255,255,255,0.12)',
-                borderRadius: '8px',
-                color: 'rgba(255,255,255,0.8)',
-                cursor: isLoading ? 'not-allowed' : 'pointer',
-                transition: 'all 0.2s',
-              }}
-            >
-              Admin
-            </button>
-          </div>
-        </div>
-
-        <div style={{ fontSize: '13px', color: 'rgba(255,255,255,0.45)', textAlign: 'center', marginTop: '24px' }}>
-          Don't have an account? <Link to="/register" style={{ fontWeight: 600, color: '#60A5FA', textDecoration: 'none' }}>Create one free</Link>
-        </div>
-
-        {/* Security footer */}
-        <div style={{ marginTop: '20px', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '12px', fontSize: '11px', color: 'rgba(255,255,255,0.25)' }}>
-          <span>256-bit Encrypted</span>
-          <span>|</span>
-          <span>BNM Compliant</span>
-          <span>|</span>
-          <span>SSM Verified</span>
+          <button
+            type="button"
+            onClick={() => fillDemo(DEMO_ADMIN)}
+            disabled={isLoading}
+            style={{
+              flex: 1,
+              fontSize: '12px',
+              padding: '10px 12px',
+              background: 'rgba(168,85,247,0.08)',
+              border: '1px solid rgba(168,85,247,0.2)',
+              borderRadius: '8px',
+              color: 'rgba(255,255,255,0.85)',
+              cursor: isLoading ? 'not-allowed' : 'pointer',
+              transition: 'all 0.2s',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              gap: '6px',
+            }}
+          >
+            <span style={{ width: '6px', height: '6px', borderRadius: '50%', background: '#A855F7', flexShrink: 0 }}></span>
+            Admin
+          </button>
         </div>
       </div>
-    </div>
+
+      <div className="auth-card-delay-3" style={{ fontSize: '13px', color: 'rgba(255,255,255,0.45)', textAlign: 'center', marginTop: '24px' }}>
+        Don't have an account? <Link to="/register" style={{ fontWeight: 600, color: '#60A5FA', textDecoration: 'none' }}>Create one free</Link>
+      </div>
+
+      {/* Security footer */}
+      <div style={{ marginTop: '20px', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '12px', fontSize: '11px', color: 'rgba(255,255,255,0.25)' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
+          <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0110 0v4"/></svg>
+          256-bit Encrypted
+        </div>
+        <span style={{ color: 'rgba(255,255,255,0.15)' }}>|</span>
+        <span>BNM Compliant</span>
+        <span style={{ color: 'rgba(255,255,255,0.15)' }}>|</span>
+        <span>SSM Verified</span>
+      </div>
+    </AuthLayout>
   );
 };
 

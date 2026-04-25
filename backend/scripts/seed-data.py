@@ -44,8 +44,8 @@ def iso_utc(dt: datetime) -> str:
     return dt.astimezone(timezone.utc).replace(microsecond=0).isoformat().replace("+00:00", "Z")
 
 
-DEMO_USER_PASSWORD = os.getenv("SEED_USER_PASSWORD", "demo123")
-DEMO_ADMIN_PASSWORD = os.getenv("SEED_ADMIN_PASSWORD", "admin123")
+DEMO_USER_PASSWORD = os.getenv("SEED_USER_PASSWORD", "Demo@123")
+DEMO_ADMIN_PASSWORD = os.getenv("SEED_ADMIN_PASSWORD", "Admin@123")
 
 
 def hash_password(plain: str) -> str:

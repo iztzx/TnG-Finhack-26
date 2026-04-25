@@ -1,7 +1,11 @@
 // Configurable API base URL
-// Replace with your deployed API Gateway URL after SAM deployment:
-// Example: https://abc123def.execute-api.ap-southeast-1.amazonaws.com/Prod
-export const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'https://YOUR-API-ID.execute-api.ap-southeast-1.amazonaws.com/Prod';
+// In development, Vite proxies /api/* to the real API Gateway,
+// so we use a relative path. In production (built dist), we need
+// the full URL from the environment variable.
+const isDev = import.meta.env.DEV;
+export const API_BASE_URL = isDev
+  ? ''  // relative path – Vite dev server proxies /api to AWS
+  : (import.meta.env.VITE_API_BASE_URL || 'https://YOUR-API-ID.execute-api.ap-southeast-1.amazonaws.com/Prod');
 
 // Alibaba Cloud Function Compute URL for invoice upload + Document AI extraction
 export const ALIBABA_FC_URL = import.meta.env.VITE_ALIBABA_FC_URL || 'https://YOUR-FC-ID.ap-southeast-3.fcapp.run';
