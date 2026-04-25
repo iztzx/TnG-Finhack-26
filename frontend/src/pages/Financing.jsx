@@ -7,7 +7,7 @@ import {
   TrendingUp, Wallet, Info, Mail,
 } from 'lucide-react';
 import RiskGauge from '../components/RiskGauge';
-import { uploadToAlibaba, getScoringOffer, acceptOffer, trackShipment, verifyShipment } from '../lib/api';
+import { uploadToAlibaba, getScoringOffer, acceptOffer, sendAssignmentNotice, trackShipment, verifyShipment } from '../lib/api';
 
 // ============================================================================
 // State machine constants
@@ -89,6 +89,152 @@ function OfferSkeleton() {
 // ============================================================================
 // Main Financing page
 // ============================================================================
+
+// ============================================================================
+// Agreement Modal – Receivables Assignment Agreement
+// ============================================================================
+function AgreementModal({ offerAmount, onAccept, onClose }) {
+  const [scrolledToBottom, setScrolledToBottom] = useState(false);
+  const scrollRef = useRef(null);
+
+  const handleScroll = () => {
+    if (!scrollRef.current) return;
+    const { scrollTop, scrollHeight, clientHeight } = scrollRef.current;
+    if (scrollTop + clientHeight >= scrollHeight - 20) {
+      setScrolledToBottom(true);
+    }
+  };
+
+  return (
+    <motion.div
+      initial={{ opacity: 0 }}
+      animate={{ opacity: 1 }}
+      exit={{ opacity: 0 }}
+      className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4"
+      onClick={onClose}
+    >
+      <motion.div
+        initial={{ scale: 0.92, opacity: 0, y: 20 }}
+        animate={{ scale: 1, opacity: 1, y: 0 }}
+        exit={{ scale: 0.92, opacity: 0, y: 20 }}
+        transition={{ type: 'spring', stiffness: 300, damping: 25 }}
+        className="bg-white rounded-2xl shadow-2xl w-full max-w-2xl max-h-[85vh] flex flex-col overflow-hidden"
+        onClick={(e) => e.stopPropagation()}
+      >
+        {/* Header */}
+        <div className="bg-gradient-to-r from-[#003d82] to-[#005abb] px-6 py-4 flex items-center justify-between">
+          <div>
+            <h2 className="text-lg font-bold text-white">Receivables Assignment Agreement</h2>
+            <p className="text-xs text-white/70 mt-0.5">Out&In Sdn Bhd &mdash; Terms and Conditions</p>
+          </div>
+          <button onClick={onClose} className="text-white/70 hover:text-white transition-colors">
+            <X className="w-5 h-5" />
+          </button>
+        </div>
+
+        {/* Scrollable content */}
+        <div
+          ref={scrollRef}
+          onScroll={handleScroll}
+          className="flex-1 overflow-y-auto px-6 py-5 text-sm text-gray-700 leading-relaxed space-y-4"
+        >
+          <p className="text-xs text-gray-400 uppercase tracking-wide font-semibold">Important &mdash; Please Read Carefully</p>
+
+          <p>
+            By clicking &ldquo;I Accept&rdquo;, you (the Assignor) agree to be legally bound by this
+            Receivables Assignment Agreement and all Terms and Conditions herein. This constitutes a
+            legally binding contract between you and <strong>Out&In Sdn Bhd</strong>.
+          </p>
+
+          <div className="bg-blue-50 rounded-lg p-4 border border-blue-100">
+            <h4 className="font-semibold text-blue-900 text-sm mb-2">Assignment of Receivables (Clause 3)</h4>
+            <ul className="list-disc pl-5 space-y-1 text-xs text-blue-800">
+              <li>The Assignor irrevocably assigns all right, title, and interest in the Receivable to Out&In Sdn Bhd.</li>
+              <li>This includes full rights to collect, enforce payment, and pursue legal remedies.</li>
+              <li>The Assignment constitutes a true sale, not a security arrangement.</li>
+              <li>The Assignment cannot be revoked once the Financing Amount is disbursed.</li>
+            </ul>
+          </div>
+
+          <div className="bg-amber-50 rounded-lg p-4 border border-amber-100">
+            <h4 className="font-semibold text-amber-900 text-sm mb-2">Notice to Buyer (Clause 5)</h4>
+            <ul className="list-disc pl-5 space-y-1 text-xs text-amber-800">
+              <li>Out&In may notify the Buyer of the Assignment at its discretion.</li>
+              <li>All payments must be made directly to Out&In Sdn Bhd&apos;s designated account.</li>
+              <li>Payment to any other party will not discharge the Buyer&apos;s obligation.</li>
+              <li>An email notification will be automatically sent to the Buyer upon acceptance.</li>
+            </ul>
+          </div>
+
+          <div className="bg-red-50 rounded-lg p-4 border border-red-100">
+            <h4 className="font-semibold text-red-900 text-sm mb-2">Full Recourse Obligation (Clause 8) &mdash; Critical</h4>
+            <ul className="list-disc pl-5 space-y-1 text-xs text-red-800">
+              <li>The Facility is provided on a FULL RECOURSE basis.</li>
+              <li>The Assignor remains liable if the Buyer fails to pay for any reason.</li>
+              <li>Repayment is due within 3 Business Days of Out&In&apos;s written demand.</li>
+              <li>Default Interest accrues daily on all overdue amounts.</li>
+            </ul>
+          </div>
+
+          <div className="bg-gray-50 rounded-lg p-4 border border-gray-200">
+            <h4 className="font-semibold text-gray-900 text-sm mb-2">Payment Details</h4>
+            <div className="grid grid-cols-2 gap-2 text-xs">
+              <span className="text-gray-500">Bank Name:</span><span className="font-medium">Public Bank</span>
+              <span className="text-gray-500">Account Name:</span><span className="font-medium">Out&In Sdn Bhd</span>
+              <span className="text-gray-500">Account Number:</span><span className="font-medium">509410012763778</span>
+              <span className="text-gray-500">SWIFT Code:</span><span className="font-medium">PBBEMYKLXXX</span>
+            </div>
+          </div>
+
+          <div className="bg-gray-50 rounded-lg p-4 border border-gray-200">
+            <h4 className="font-semibold text-gray-900 text-sm mb-2">Other Key Terms</h4>
+            <ul className="list-disc pl-5 space-y-1 text-xs text-gray-700">
+              <li><strong>Governing Law:</strong> Laws of Malaysia (Contracts Act 1950, Civil Law Act 1956, Companies Act 2016, PDPA 2010).</li>
+              <li><strong>Dispute Resolution:</strong> Negotiation &rarr; Mediation (MMC) &rarr; Arbitration (AIAC, Kuala Lumpur).</li>
+              <li><strong>Data Protection:</strong> Personal data processed under PDPA 2010 for KYC, credit assessment, and compliance.</li>
+              <li><strong>Confidentiality:</strong> All non-public information to be kept confidential by both parties.</li>
+              <li><strong>Indemnity:</strong> Assignor indemnifies Out&In for all losses from breaches, fraud, or third-party claims.</li>
+              <li><strong>Electronic Execution:</strong> Clicking &ldquo;I Accept&rdquo; has the same effect as a handwritten signature (Electronic Commerce Act 2006).</li>
+            </ul>
+          </div>
+
+          <p className="text-xs text-gray-400 text-center italic pt-2">
+            Scroll to the bottom to enable the Accept button.
+          </p>
+        </div>
+
+        {/* Footer */}
+        <div className="border-t border-gray-100 px-6 py-4 flex items-center justify-between bg-gray-50/50">
+          <div className="text-sm">
+            <span className="text-gray-500">Disbursement Amount: </span>
+            <span className="font-bold text-tng-blue text-lg">RM {Number(offerAmount || 0).toLocaleString()}</span>
+          </div>
+          <div className="flex gap-3">
+            <button
+              onClick={onClose}
+              className="px-4 py-2 border border-gray-200 text-gray-600 rounded-lg text-sm font-medium hover:bg-gray-100 transition-colors"
+            >
+              Cancel
+            </button>
+            <button
+              onClick={onAccept}
+              disabled={!scrolledToBottom}
+              className={`flex items-center gap-2 px-5 py-2.5 rounded-lg text-sm font-bold transition-all ${
+                scrolledToBottom
+                  ? 'bg-green-600 text-white hover:bg-green-700 shadow-lg shadow-green-200'
+                  : 'bg-gray-200 text-gray-400 cursor-not-allowed'
+              }`}
+            >
+              <CheckCircle className="w-4 h-4" />
+              I Accept &amp; Disburse
+            </button>
+          </div>
+        </div>
+      </motion.div>
+    </motion.div>
+  );
+}
+
 export default function Financing() {
   const fileInputRef = useRef(null);
   const [activeTab, setActiveTab] = useState('invoice');
@@ -228,12 +374,32 @@ export default function Financing() {
         origin: { y: 0.55 },
         colors: ['#005ABB', '#F5A623', '#22c55e', '#ffffff'],
       });
+
+      // Auto-send Notice of Assignment email to the buyer
+      if (contactEmail || extractedData?.buyerName) {
+        const emailParams = {
+          invoiceId: invoiceId || offer.offerId,
+          offerId: offer.offerId,
+          buyerEmail: contactEmail || '',
+          buyerCompanyName: extractedData?.buyerName || extractedData?.buyer_name || '',
+          smeCompanyName: extractedData?.merchantName || extractedData?.vendor_name || '',
+          invoiceNumber: extractedData?.invoiceNumber || '',
+          invoiceDate: extractedData?.issueDate || extractedData?.invoice_date || '',
+          invoiceAmount: Number(extractedData?.extractedAmount || extractedData?.amount || offer.invoiceAmount || 0),
+          currency: extractedData?.currency || 'RM',
+        };
+
+        const emailResult = await sendAssignmentNotice(emailParams);
+        if (emailResult.status === 'SENT' || emailResult.status === 'QUEUED') {
+          setEmailSent(true);
+        }
+      }
     } catch (err) {
       const msg = err.friendlyMessage || err.message || 'Disbursement failed';
       setErrorMessage(msg);
       setFlowState(FlowState.ERROR);
     }
-  }, [offer]);
+  }, [offer, contactEmail, extractedData, invoiceId]);
 
   // ---------------------------------------------------------------------------
   // Shipment flow actions (unchanged)
