@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   Users,
   UserCheck,
@@ -14,17 +14,7 @@ import {
   AlertCircle,
   CalendarDays,
 } from 'lucide-react';
-
-const mockSMEs = [
-  { id: 'SME-001', name: 'Apex Trading Sdn Bhd', regDate: '2025-08-14', kyc: 'Verified', totalFinanced: 1245000, sector: 'Import/Export', riskTier: 'Low' },
-  { id: 'SME-002', name: 'GreenLeaf Exports Pte Ltd', regDate: '2025-11-02', kyc: 'Verified', totalFinanced: 892000, sector: 'Agriculture', riskTier: 'Low' },
-  { id: 'SME-003', name: 'MalayTech Solutions', regDate: '2026-01-19', kyc: 'Pending', totalFinanced: 350000, sector: 'Technology', riskTier: 'Medium' },
-  { id: 'SME-004', name: 'Borneo Spice Co.', regDate: '2025-06-30', kyc: 'Verified', totalFinanced: 1780000, sector: 'FMCG', riskTier: 'Low' },
-  { id: 'SME-005', name: 'Zenith Logistics MY', regDate: '2026-02-11', kyc: 'Under Review', totalFinanced: 420000, sector: 'Logistics', riskTier: 'Medium' },
-  { id: 'SME-006', name: 'Pacific Rim Metals', regDate: '2025-09-25', kyc: 'Verified', totalFinanced: 2150000, sector: 'Manufacturing', riskTier: 'Low' },
-  { id: 'SME-007', name: 'KL Freight Hub', regDate: '2026-03-05', kyc: 'Pending', totalFinanced: 0, sector: 'Logistics', riskTier: 'Unrated' },
-  { id: 'SME-008', name: 'Sarawak Timber Works', regDate: '2025-12-18', kyc: 'Verified', totalFinanced: 675000, sector: 'Forestry', riskTier: 'Low' },
-];
+import { getAdminSMEList } from '../../lib/api';
 
 const kycBadge = (status) => {
   switch (status) {
@@ -46,17 +36,36 @@ const kycIcon = (status) => {
 
 export default function SMEList() {
   const [searchQuery, setSearchQuery] = useState('');
+  const [smes, setSmes] = useState([]);
+  const [loading, setLoading] = useState(true);
 
-  const filtered = mockSMEs.filter(
+  useEffect(() => {
+    async function load() {
+      setLoading(true);
+      try {
+        const data = await getAdminSMEList();
+        if (data?.smes?.length > 0) {
+          setSmes(data.smes);
+        }
+      } catch {
+        // keep empty
+      } finally {
+        setLoading(false);
+      }
+    }
+    load();
+  }, []);
+
+  const filtered = smes.filter(
     (sme) =>
       sme.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
       sme.id.toLowerCase().includes(searchQuery.toLowerCase()) ||
       sme.sector.toLowerCase().includes(searchQuery.toLowerCase())
   );
 
-  const totalActive = mockSMEs.filter((s) => s.kyc === 'Verified').length;
-  const pendingKYC = mockSMEs.filter((s) => s.kyc !== 'Verified').length;
-  const totalCapital = mockSMEs.reduce((sum, s) => sum + s.totalFinanced, 0);
+  const totalActive = smes.filter((s) => s.kyc === 'Verified').length;
+  const pendingKYC = smes.filter((s) => s.kyc !== 'Verified').length;
+  const totalCapital = smes.reduce((sum, s) => sum + s.totalFinanced, 0);
 
   const topMetrics = [
     { label: 'Total active SMEs', value: String(totalActive), delta: 'KYC verified and onboarded', icon: UserCheck, tone: 'from-emerald-500/20 to-emerald-400/5 text-emerald-100 border-emerald-400/15' },
@@ -106,7 +115,7 @@ export default function SMEList() {
         <div className="mb-5 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
           <div>
             <h2 className="text-lg font-semibold text-white">Registered SMEs</h2>
-            <p className="mt-1 text-sm text-slate-400">{mockSMEs.length} organisations in directory</p>
+            <p className="mt-1 text-sm text-slate-400">{smes.length} organisations in directory</p>
           </div>
           <div className="flex items-center gap-2">
             <div className="flex items-center gap-2 rounded-2xl border border-white/10 bg-white/5 px-3 py-2">

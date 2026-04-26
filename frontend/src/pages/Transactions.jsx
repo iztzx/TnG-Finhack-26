@@ -1,13 +1,14 @@
 import { useState, useEffect } from 'react';
-import { Download, Filter, Calendar, FileSpreadsheet, ArrowUpDown, ArrowUp, ArrowDown, CircleDollarSign, Clock3, BadgeCheck, ReceiptText, Wallet } from 'lucide-react';
+import { Download, Filter, Calendar, FileSpreadsheet, ArrowUpDown, ArrowUp, ArrowDown, CircleDollarSign, Clock3, BadgeCheck, ReceiptText, Wallet, Banknote, AlertTriangle } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
-import { listInvoices, downloadReconciliation } from '../lib/api';
+import { listInvoices, getTransactionLedger, downloadReconciliation } from '../lib/api';
 
-const filterOptions = ['ALL', 'FUNDED', 'REPAID', 'PENDING_REVIEW', 'OFFER_MADE', 'ANALYZED'];
+const filterOptions = ['ALL', 'FUNDED', 'REPAID', 'COMPLETED', 'PENDING_REVIEW', 'OFFER_MADE', 'ANALYZED'];
 
 const statusColors = {
   FUNDED: 'bg-green-50 text-green-700',
   REPAID: 'bg-blue-50 text-blue-700',
+  COMPLETED: 'bg-emerald-50 text-emerald-700',
   PENDING_REVIEW: 'bg-yellow-50 text-yellow-700',
   OFFER_MADE: 'bg-purple-50 text-purple-700',
   ANALYZED: 'bg-gray-50 text-gray-700',
@@ -19,6 +20,8 @@ export default function Transactions() {
   const [dateRange, setDateRange] = useState('Last 30 Days');
   const [downloading, setDownloading] = useState(false);
   const [invoices, setInvoices] = useState([]);
+  const [ledgerRows, setLedgerRows] = useState([]);
+  const [ledgerError, setLedgerError] = useState(null);
   const [loading, setLoading] = useState(true);
   const [sortKey, setSortKey] = useState(null);
   const [sortDir, setSortDir] = useState('asc');
@@ -27,21 +30,59 @@ export default function Transactions() {
     async function load() {
       setLoading(true);
       try {
-        const data = await listInvoices();
-        if (data?.invoices?.length > 0) {
-          const mapped = data.invoices.map((inv) => ({
-            invoiceId: inv.invoiceId,
-            vendorName: inv.vendorName,
-            amount: inv.amount,
-            totalFeeRate: inv.offerData?.totalFeeRate || 0,
-            factoringFee: inv.offerData?.factoringFee || 0,
-            netDisbursement: inv.offerData?.netDisbursement || 0,
-            status: inv.status,
-            invoiceDate: inv.invoiceDate,
-            dueDate: inv.dueDate,
-          }));
-          setInvoices(mapped);
+        const userId = userProfile?.id || userProfile?.email || 'demo-user-001';
+
+        // Fetch both invoices and real transaction ledger records in parallel
+        const [invData, ledgerData] = await Promise.allSettled([
+          listInvoices(userId),
+          getTransactionLedger(userId),
+        ]);
+
+        // Map invoices
+        const invoiceItems = invData.status === 'fulfilled' && invData.value?.invoices?.length > 0
+          ? invData.value.invoices.map((inv) => ({
+              id: inv.invoiceId,
+              invoiceId: inv.invoiceId,
+              vendorName: inv.vendorName,
+              amount: inv.amount,
+              totalFeeRate: inv.offerData?.totalFeeRate || 0,
+              factoringFee: inv.offerData?.factoringFee || 0,
+              netDisbursement: inv.offerData?.netDisbursement || 0,
+              status: inv.status,
+              invoiceDate: inv.invoiceDate,
+              dueDate: inv.dueDate,
+              source: 'invoice',
+            }))
+          : [];
+        setInvoices(invoiceItems);
+
+        // Map transaction ledger records
+        const rawLedger = ledgerData.status === 'fulfilled' ? ledgerData.value : null;
+        if (rawLedger?._error) {
+          setLedgerError(rawLedger._errorMessage || 'Failed to load transaction ledger');
+        } else {
+          setLedgerError(null);
         }
+        const ledgerItems = rawLedger?.transactions?.length > 0
+          ? rawLedger.transactions.map((txn) => ({
+              id: txn.id,
+              transactionId: txn.id,
+              invoiceId: txn.invoiceId || '',
+              offerId: txn.offerId || '',
+              amount: txn.amount || 0,
+              netDisbursement: txn.amount || 0,
+              currency: txn.currency || 'RM',
+              status: txn.status || 'COMPLETED',
+              type: txn.type || 'INVOICE_DISBURSEMENT',
+              paymentMethod: txn.paymentMethod || '',
+              createdAt: txn.createdAt || '',
+              invoiceDate: txn.createdAt ? txn.createdAt.split('T')[0] : '',
+              dueDate: '',
+              vendorName: txn.type === 'INVOICE_DISBURSEMENT' ? 'Disbursement' : txn.type === 'CREDIT_SCORING' ? 'Credit Scoring' : txn.type.replace(/_/g, ' '),
+              source: 'ledger',
+            }))
+          : [];
+        setLedgerRows(ledgerItems);
       } catch {
         // keep empty
       } finally {
@@ -53,7 +94,7 @@ export default function Transactions() {
     const handleRefresh = () => load();
     window.addEventListener('transactions:refresh', handleRefresh);
     return () => window.removeEventListener('transactions:refresh', handleRefresh);
-  }, []);
+  }, [userProfile?.id, userProfile?.email]);
 
   const handleSort = (key) => {
     if (sortKey === key) {
@@ -84,9 +125,28 @@ export default function Transactions() {
     }
   };
 
-  const filtered = invoices
-    .filter((inv) => filter === 'ALL' || inv.status === filter)
-    .filter((inv) => isWithinDateRange(inv.invoiceDate || inv.timestamp))
+  // Merge invoice rows and ledger rows, deduplicating by id/invoiceId
+  // Ledger records (real disbursement transactions) take priority for the same invoiceId
+  const allRows = (() => {
+    const seen = new Set();
+    const merged = [];
+    // Add ledger rows first (they're real transaction records)
+    for (const row of ledgerRows) {
+      if (row.invoiceId) seen.add(row.invoiceId);
+      merged.push(row);
+    }
+    // Add invoice rows that aren't already represented by a ledger row
+    for (const inv of invoices) {
+      if (!seen.has(inv.invoiceId)) {
+        merged.push(inv);
+      }
+    }
+    return merged;
+  })();
+
+  const filtered = allRows
+    .filter((row) => filter === 'ALL' || row.status === filter)
+    .filter((row) => isWithinDateRange(row.invoiceDate || row.createdAt))
     .sort((a, b) => {
       if (!sortKey) return 0;
       const aVal = a[sortKey];
@@ -98,6 +158,10 @@ export default function Transactions() {
 
   const completedInvoices = invoices.filter((i) => i.status === 'REPAID').length;
   const totalDisbursed = invoices.filter((i) => i.status === 'FUNDED' || i.status === 'REPAID').reduce((sum, i) => sum + (i.netDisbursement || 0), 0);
+  // Use ledger amount when available (source of truth), fall back to invoice-derived amount
+  const totalAdvanced = ledgerRows.length > 0
+    ? ledgerRows.reduce((sum, t) => sum + (t.netDisbursement || 0), 0)
+    : totalDisbursed;
   const pendingRepayments = invoices.filter((i) => i.status === 'FUNDED').reduce((sum, i) => sum + (i.amount || 0), 0);
   const averageAdvanceRate = invoices.length
     ? invoices.reduce((sum, i) => sum + (((i.netDisbursement || 0) / Math.max(i.amount || 1, 1)) * 100), 0) / invoices.length
@@ -140,8 +204,8 @@ export default function Transactions() {
   };
 
   const headers = [
-    { key: 'invoiceId', label: 'Invoice ID' },
-    { key: 'vendorName', label: 'Vendor' },
+    { key: 'id', label: 'Ref ID' },
+    { key: 'vendorName', label: 'Description' },
     { key: 'amount', label: 'Invoice Amount (RM)' },
     { key: 'netDisbursement', label: 'Advanced To You (RM)' },
     { key: 'status', label: 'Status' },
@@ -188,7 +252,7 @@ export default function Transactions() {
               <CircleDollarSign className="h-5 w-5" />
             </div>
           </div>
-          <p className="mt-4 text-2xl font-semibold text-slate-900">RM {totalDisbursed.toLocaleString()}</p>
+          <p className="mt-4 text-2xl font-semibold text-slate-900">RM {totalAdvanced.toLocaleString()}</p>
         </div>
         <div className="rounded-[28px] border border-white/70 bg-white/88 p-5 shadow-sm backdrop-blur">
           <div className="flex items-center justify-between">
@@ -218,6 +282,13 @@ export default function Transactions() {
           <p className="mt-4 text-2xl font-semibold text-slate-900">{averageAdvanceRate.toFixed(1)}%</p>
         </div>
       </div>
+
+      {ledgerError && (
+        <div className="flex items-center gap-3 rounded-2xl border border-amber-200 bg-amber-50 px-5 py-3 text-sm text-amber-800">
+          <AlertTriangle className="h-4 w-4 shrink-0" />
+          <span>Transaction ledger unavailable: {ledgerError}. Showing invoice-based records only.</span>
+        </div>
+      )}
 
       <div className="rounded-[32px] border border-white/70 bg-white/88 p-5 shadow-sm backdrop-blur space-y-4">
         <div className="flex flex-wrap items-center gap-4">
@@ -288,8 +359,13 @@ export default function Transactions() {
                 ))
               ) : (
                 filtered.map((row) => (
-                  <tr key={row.invoiceId} className="border-b border-slate-50 transition-colors hover:bg-slate-50/60">
-                    <td className="px-4 py-4 font-mono text-slate-600">{row.invoiceId}</td>
+                  <tr key={row.id || row.invoiceId} className={`border-b border-slate-50 transition-colors hover:bg-slate-50/60 ${row.source === 'ledger' ? 'bg-emerald-50/30' : ''}`}>
+                    <td className="px-4 py-4 font-mono text-slate-600">
+                      <div className="flex items-center gap-1.5">
+                        {row.source === 'ledger' && <Banknote className="w-3.5 h-3.5 text-emerald-500 shrink-0" />}
+                        <span>{row.transactionId || row.invoiceId}</span>
+                      </div>
+                    </td>
                     <td className="px-4 py-4 font-medium text-slate-900">{row.vendorName}</td>
                     <td className="px-4 py-4 text-slate-700">RM {row.amount.toLocaleString()}</td>
                     <td className="px-4 py-4 font-medium text-slate-900">RM {row.netDisbursement.toLocaleString()}</td>
@@ -298,7 +374,7 @@ export default function Transactions() {
                         {row.status.replace(/_/g, ' ')}
                       </span>
                     </td>
-                    <td className="px-4 py-4 text-slate-500">{row.dueDate}</td>
+                    <td className="px-4 py-4 text-slate-500">{row.dueDate || '—'}</td>
                     <td className="px-4 py-4 text-slate-500">{row.invoiceDate}</td>
                   </tr>
                 ))

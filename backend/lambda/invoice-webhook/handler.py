@@ -42,8 +42,10 @@ logger = Logger(
 dynamodb = boto3.resource("dynamodb")
 INVOICES_TABLE = os.environ["INVOICES_TABLE"]
 OFFERS_TABLE = os.environ["OFFERS_TABLE"]
+TRANSACTIONS_TABLE = os.environ.get("TRANSACTIONS_TABLE", "")
 invoices_table = dynamodb.Table(INVOICES_TABLE)
 offers_table = dynamodb.Table(OFFERS_TABLE)
+transactions_table = dynamodb.Table(TRANSACTIONS_TABLE) if TRANSACTIONS_TABLE else None
 
 # ---------------------------------------------------------------------------
 # CORS headers shared across all responses
@@ -474,7 +476,39 @@ def handler(event, context):
         })
 
     # ------------------------------------------------------------------
-    # 6. Return success response
+    # 6. Write transaction ledger record for the scoring/offer event
+    #    Non-fatal – failure is logged but does not block the webhook response.
+    # ------------------------------------------------------------------
+    if transactions_table:
+        try:
+            scoring_txn_id = f"TXN-{uuid.uuid4().hex[:12].upper()}"
+            scoring_ledger_item = _to_dynamo({
+                "id": scoring_txn_id,
+                "type": "CREDIT_SCORING",
+                "offerId": offer["id"],
+                "invoiceId": payload.invoiceId,
+                "smeId": sme_id,
+                "amount": Decimal(str(payload.amount)),
+                "currency": payload.extractedData.currency,
+                "status": "COMPLETED",
+                "scoringMethod": scoring["scoringMethod"],
+                "riskScore": scoring["riskScore"],
+                "riskTier": scoring["riskTier"],
+                "createdAt": now_utc,
+            })
+            transactions_table.put_item(Item=scoring_ledger_item)
+            logger.info("Scoring transaction ledger written", extra={
+                "transactionId": scoring_txn_id,
+                "invoiceId": payload.invoiceId,
+            })
+        except Exception as exc:
+            logger.warning("Failed to write scoring transaction ledger (non-fatal)", extra={
+                "invoiceId": payload.invoiceId,
+                "error": str(exc),
+            })
+
+    # ------------------------------------------------------------------
+    # 7. Return success response
     # ------------------------------------------------------------------
     return _response(200, {
         "invoiceId": payload.invoiceId,

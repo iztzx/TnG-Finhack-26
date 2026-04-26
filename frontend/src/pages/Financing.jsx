@@ -388,6 +388,9 @@ export default function Financing() {
         colors: ['#005ABB', '#F5A623', '#22c55e', '#ffffff'],
       });
 
+      // Notify Transactions page to refresh so the new ledger record appears
+      window.dispatchEvent(new CustomEvent('transactions:refresh'));
+
       // Auto-send Notice of Assignment email to the buyer
       if (contactEmail || extractedData?.buyerName) {
         const emailParams = {
@@ -461,6 +464,8 @@ export default function Financing() {
     } finally {
       setVerifying(false);
       setShipmentAccepted(true);
+      // Notify Transactions page to refresh so the new ledger record appears
+      window.dispatchEvent(new CustomEvent('transactions:refresh'));
       confetti({
         particleCount: 120,
         spread: 70,

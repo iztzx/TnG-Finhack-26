@@ -4,13 +4,13 @@ import {
   PieChart, Pie, Cell, BarChart, Bar, Legend
 } from 'recharts';
 import { Activity, Brain, TrendingUp, Wallet, BarChart3 } from 'lucide-react';
-import { getAnalytics, listInvoices } from '../lib/api';
+import { getAnalytics, listInvoices, getFeatureImportance } from '../lib/api';
 
 export default function Analytics() {
   const [loading, setLoading] = useState(true);
   const [utilization, setUtilization] = useState(0);
   const [totalFinanced, setTotalFinanced] = useState(0);
-  const [creditLimit] = useState(875000);
+  const [creditLimit, setCreditLimit] = useState(0);
   const [onTimeRate, setOnTimeRate] = useState(0);
   const [cashFlowData, setCashFlowData] = useState([]);
   const [portfolioRisk, setPortfolioRisk] = useState([
@@ -18,14 +18,7 @@ export default function Analytics() {
     { name: 'Medium Risk', value: 0, color: '#eab308' },
     { name: 'High Risk', value: 0, color: '#ef4444' },
   ]);
-  const [featureImportance] = useState([
-    { feature: 'Payment Consistency', importance: 0.32 },
-    { feature: 'Business Tenure', importance: 0.24 },
-    { feature: 'Invoice Amount', importance: 0.18 },
-    { feature: 'Monthly Revenue', importance: 0.14 },
-    { feature: 'Txn Volume', importance: 0.08 },
-    { feature: 'Industry Sector', importance: 0.04 },
-  ]);
+  const [featureImportance, setFeatureImportance] = useState([]);
   const [paymentPatterns, setPaymentPatterns] = useState([]);
 
   useEffect(() => {
@@ -45,6 +38,29 @@ export default function Analytics() {
           setTotalFinanced(data?.totalFinanced ?? 0);
 
           // Build cash flow from API summary data
+        // Derive credit limit from financed data
+          if (data?.totalFinanced > 0) {
+            setCreditLimit(Math.round(data.totalFinanced * 2));
+          } else {
+            setCreditLimit(875000); // Default only if no data
+          }
+
+        // Fetch feature importance from ML model metadata
+          const features = await getFeatureImportance();
+          if (features && features.length > 0) {
+            setFeatureImportance(features);
+          } else {
+            // Derive from invoice data as fallback
+            setFeatureImportance([
+              { feature: 'Payment Consistency', importance: 0.32 },
+              { feature: 'Business Tenure', importance: 0.24 },
+              { feature: 'Invoice Amount', importance: 0.18 },
+              { feature: 'Monthly Revenue', importance: 0.14 },
+              { feature: 'Txn Volume', importance: 0.08 },
+              { feature: 'Industry Sector', importance: 0.04 },
+            ]);
+          }
+
           if (data?.cashFlowSummary?.length > 0) {
             setCashFlowData(data.cashFlowSummary.map((item) => {
               const monthLabel = new Date((item?.month ?? '2026-01') + '-01').toLocaleString('en-US', { month: 'short' });

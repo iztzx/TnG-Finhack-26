@@ -1,19 +1,21 @@
 import React from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Activity, AlertCircle, Clock, FileText, RefreshCw, ShieldCheck, Wallet, ArrowRight, Banknote, TimerReset, CheckCircle2, TrendingUp } from 'lucide-react';
-import { getAdminOverview } from '../../lib/api';
+import { getAdminCommandCenter } from '../../lib/api';
 
 export default function CommandCenter() {
   const navigate = useNavigate();
   const [lastUpdated, setLastUpdated] = React.useState(new Date());
   const [isRefreshing, setIsRefreshing] = React.useState(false);
   const [metrics, setMetrics] = React.useState({
-    totalInvoices: 142,
-    capitalDeployed: 4200000,
-    overdueExposure: 85000,
-    pendingReview: 18,
+    totalInvoices: 0,
+    capitalDeployed: 0,
+    overdueExposure: 0,
+    pendingReview: 0,
   });
   const [activityFeed, setActivityFeed] = React.useState(null);
+  const [actionQueue, setActionQueue] = React.useState([]);
+  const [operatorSnapshot, setOperatorSnapshot] = React.useState([]);
 
   // Load real data on mount
   React.useEffect(() => {
@@ -22,14 +24,25 @@ export default function CommandCenter() {
 
   const loadData = async () => {
     try {
-      const data = await getAdminOverview();
+      const data = await getAdminCommandCenter();
       if (data) {
-        setMetrics((prev) => ({
-          ...prev,
-          totalInvoices: data.totalInvoices || prev.totalInvoices,
-          capitalDeployed: data.capitalDeployed || prev.capitalDeployed,
-          pendingReview: data.pendingReview ?? prev.pendingReview,
-        }));
+        if (data.metrics) {
+          setMetrics((prev) => ({
+            ...prev,
+            totalInvoices: data.metrics.totalInvoices || prev.totalInvoices,
+            capitalDeployed: data.metrics.capitalDeployed || prev.capitalDeployed,
+            overdueExposure: data.metrics.overdueExposure || prev.overdueExposure,
+            pendingReview: data.metrics.pendingReview ?? prev.pendingReview,
+          }));
+        }
+
+        if (data.actionQueue?.length > 0) {
+          setActionQueue(data.actionQueue);
+        }
+
+        if (data.operatorSnapshot?.length > 0) {
+          setOperatorSnapshot(data.operatorSnapshot);
+        }
 
         // Build activity feed from real invoices
         if (data.invoices?.length > 0) {
@@ -69,12 +82,14 @@ export default function CommandCenter() {
     { label: 'Cases pending review', value: String(metrics.pendingReview), delta: 'Awaiting action', icon: Clock, tone: 'from-violet-500/20 to-violet-400/5 text-violet-100 border-violet-400/15' },
   ];
 
-  const actionQueue = [
+  const fallbackActionQueue = [
     { title: 'Review pending invoices', meta: `${metrics.pendingReview} submissions waiting on action`, accent: 'bg-blue-600', count: String(metrics.pendingReview), route: '/admin/review' },
-    { title: 'Approve disbursement batches', meta: '5 ready after risk checks', accent: 'bg-slate-700', count: '5', route: '/admin/ledger' },
-    { title: 'Resolve fraud alerts', meta: '1 high-priority anomaly surfaced', accent: 'bg-rose-600', count: '1', route: '/admin/audit' },
+    { title: 'Approve disbursement batches', meta: 'Batches ready after risk checks', accent: 'bg-slate-700', count: '—', route: '/admin/ledger' },
+    { title: 'Resolve fraud alerts', meta: 'High-priority anomalies', accent: 'bg-rose-600', count: '—', route: '/admin/audit' },
     { title: 'Generate treasury report', meta: 'Export today\'s funding summary', accent: 'bg-emerald-600', count: 'Live', route: '/admin/system' },
   ];
+
+  const displayActionQueue = actionQueue.length > 0 ? actionQueue : fallbackActionQueue;
 
   return (
     <div className="space-y-6">
@@ -166,7 +181,7 @@ export default function CommandCenter() {
           <div className="rounded-[32px] border border-white/8 bg-slate-950/45 p-6 shadow-sm backdrop-blur">
             <h2 className="text-lg font-semibold text-white">Action queue</h2>
             <div className="mt-5 space-y-3">
-              {actionQueue.map((item) => (
+              {displayActionQueue.map((item) => (
                 <button key={item.title} onClick={() => navigate(item.route)} className={`w-full rounded-3xl ${item.accent} px-4 py-4 text-left text-white transition-transform hover:-translate-y-0.5`}>
                   <div className="flex items-center justify-between gap-3">
                     <div>
@@ -183,22 +198,25 @@ export default function CommandCenter() {
           <div className="rounded-[32px] border border-white/8 bg-slate-950/45 p-6 shadow-sm backdrop-blur">
             <h2 className="text-lg font-semibold text-white">Operator snapshot</h2>
             <div className="mt-5 space-y-4">
-              {[
-                { label: 'Treasury utilisation', value: '68%', icon: Wallet },
-                { label: 'Average approval cycle', value: '23 min', icon: Clock },
-                { label: 'Automated pass-through rate', value: '74%', icon: Activity },
-                { label: 'Compliance exceptions', value: '3 open', icon: ShieldCheck },
-              ].map((item) => (
-                <div key={item.label} className="flex items-center gap-3 rounded-3xl border border-white/8 bg-white/[0.03] p-4">
-                  <div className="rounded-2xl border border-white/8 bg-white/[0.05] p-3 text-cyan-200">
-                    <item.icon className="h-4 w-4" />
+              {(operatorSnapshot.length > 0 ? operatorSnapshot : [
+                { label: 'Treasury utilisation', value: '—', icon: Wallet },
+                { label: 'Average approval cycle', value: '—', icon: Clock },
+                { label: 'Automated pass-through rate', value: '—', icon: Activity },
+                { label: 'Compliance exceptions', value: '—', icon: ShieldCheck },
+              ]).map((item) => {
+                const ItemIcon = item.icon || (item.icon === 'wallet' ? Wallet : item.icon === 'clock' ? Clock : item.icon === 'activity' ? Activity : ShieldCheck);
+                return (
+                  <div key={item.label} className="flex items-center gap-3 rounded-3xl border border-white/8 bg-white/[0.03] p-4">
+                    <div className="rounded-2xl border border-white/8 bg-white/[0.05] p-3 text-cyan-200">
+                      {typeof ItemIcon === 'function' ? <ItemIcon className="h-4 w-4" /> : <Activity className="h-4 w-4" />}
+                    </div>
+                    <div className="min-w-0 flex-1">
+                      <p className="text-xs uppercase tracking-[0.2em] text-slate-500">{item.label}</p>
+                      <p className="mt-1 text-lg font-semibold text-white">{item.value}</p>
+                    </div>
                   </div>
-                  <div className="min-w-0 flex-1">
-                    <p className="text-xs uppercase tracking-[0.2em] text-slate-500">{item.label}</p>
-                    <p className="mt-1 text-lg font-semibold text-white">{item.value}</p>
-                  </div>
-                </div>
-              ))}
+                );
+              })}
             </div>
           </div>
         </section>

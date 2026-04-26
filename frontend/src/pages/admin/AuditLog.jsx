@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   ScrollText,
   Search,
@@ -20,21 +20,7 @@ import {
   Eye,
   Download,
 } from 'lucide-react';
-
-const mockAuditEntries = [
-  { id: 'AUD-90012', timestamp: '2026-04-25 14:32:18', actor: 'ahmad.razak@tng.com.my', actorType: 'admin', action: 'Invoice Approved', target: 'Invoice #INV-2026-1047', ip: '103.28.212.45', severity: 'info' },
-  { id: 'AUD-90011', timestamp: '2026-04-25 14:18:05', actor: 'System — ML Pipeline', actorType: 'system', action: 'Risk Score Generated', target: 'Invoice #INV-2026-1048', ip: '10.0.4.22', severity: 'info' },
-  { id: 'AUD-90010', timestamp: '2026-04-25 13:55:42', actor: 'sarah.lim@tng.com.my', actorType: 'admin', action: 'Disbursement Batch Released', target: 'Batch #BATCH-0089', ip: '103.28.212.51', severity: 'warning' },
-  { id: 'AUD-90009', timestamp: '2026-04-25 13:42:10', actor: 'System — Auth Service', actorType: 'system', action: 'Failed Login Attempt', target: 'User ops-admin@tng.com.my', ip: '185.220.101.34', severity: 'critical' },
-  { id: 'AUD-90008', timestamp: '2026-04-25 13:20:33', actor: 'ahmad.razak@tng.com.my', actorType: 'admin', action: 'KYC Status Updated', target: 'SME — Zenith Logistics MY', ip: '103.28.212.45', severity: 'info' },
-  { id: 'AUD-90007', timestamp: '2026-04-25 12:58:17', actor: 'System — Scheduler', actorType: 'system', action: 'Automated Report Generated', target: 'Daily Treasury Summary', ip: '10.0.4.10', severity: 'info' },
-  { id: 'AUD-90006', timestamp: '2026-04-25 12:45:09', actor: 'sarah.lim@tng.com.my', actorType: 'admin', action: 'Invoice Escalated', target: 'Invoice #INV-2026-1045', ip: '103.28.212.51', severity: 'warning' },
-  { id: 'AUD-90005', timestamp: '2026-04-25 12:30:22', actor: 'ahmad.razak@tng.com.my', actorType: 'admin', action: 'SME Profile Viewed', target: 'SME — Apex Trading Sdn Bhd', ip: '103.28.212.45', severity: 'info' },
-  { id: 'AUD-90004', timestamp: '2026-04-25 11:15:48', actor: 'System — Fraud Engine', actorType: 'system', action: 'Anomaly Detected', target: 'Invoice #INV-2026-1039', ip: '10.0.4.22', severity: 'critical' },
-  { id: 'AUD-90003', timestamp: '2026-04-25 10:50:31', actor: 'ops-admin@tng.com.my', actorType: 'admin', action: 'System Config Updated', target: 'Risk Threshold — High ≥ 80', ip: '103.28.212.60', severity: 'warning' },
-  { id: 'AUD-90002', timestamp: '2026-04-25 10:22:14', actor: 'System — Treasury', actorType: 'system', action: 'Repayment Received', target: 'Invoice #INV-2026-0965', ip: '10.0.4.15', severity: 'info' },
-  { id: 'AUD-90001', timestamp: '2026-04-25 09:45:07', actor: 'ahmad.razak@tng.com.my', actorType: 'admin', action: 'Admin Session Started', target: 'Command Center', ip: '103.28.212.45', severity: 'info' },
-];
+import { getAdminAuditLog } from '../../lib/api';
 
 const actionIcons = {
   'Invoice Approved': CheckCircle2,
@@ -60,8 +46,27 @@ const severityConfig = {
 export default function AuditLog() {
   const [searchQuery, setSearchQuery] = useState('');
   const [severityFilter, setSeverityFilter] = useState('all');
+  const [entries, setEntries] = useState([]);
+  const [loading, setLoading] = useState(true);
 
-  const filtered = mockAuditEntries.filter((entry) => {
+  useEffect(() => {
+    async function load() {
+      setLoading(true);
+      try {
+        const data = await getAdminAuditLog({ severity: severityFilter, search: searchQuery });
+        if (data?.entries?.length > 0) {
+          setEntries(data.entries);
+        }
+      } catch {
+        // keep empty
+      } finally {
+        setLoading(false);
+      }
+    }
+    load();
+  }, [severityFilter, searchQuery]);
+
+  const filtered = entries.filter((entry) => {
     const matchesSearch =
       entry.actor.toLowerCase().includes(searchQuery.toLowerCase()) ||
       entry.action.toLowerCase().includes(searchQuery.toLowerCase()) ||
@@ -71,9 +76,9 @@ export default function AuditLog() {
     return matchesSearch && matchesSeverity;
   });
 
-  const totalEvents = mockAuditEntries.length;
-  const criticalCount = mockAuditEntries.filter((e) => e.severity === 'critical').length;
-  const adminActions = mockAuditEntries.filter((e) => e.actorType === 'admin').length;
+  const totalEvents = entries.length;
+  const criticalCount = entries.filter((e) => e.severity === 'critical').length;
+  const adminActions = entries.filter((e) => e.actorType === 'admin').length;
 
   const topMetrics = [
     { label: 'Total events today', value: String(totalEvents), delta: 'All recorded actions', icon: ScrollText, tone: 'from-blue-600/25 to-blue-400/5 text-blue-100 border-blue-400/15' },

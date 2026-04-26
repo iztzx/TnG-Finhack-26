@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   Landmark,
   Wallet,
@@ -13,23 +13,7 @@ import {
   BadgeDollarSign,
   Layers,
 } from 'lucide-react';
-
-const mockBatches = [
-  { id: 'BATCH-0091', smeCount: 5, totalAmount: 487500, status: 'Ready', createdAt: '15 min ago' },
-  { id: 'BATCH-0090', smeCount: 3, totalAmount: 215000, status: 'Ready', createdAt: '1 hour ago' },
-  { id: 'BATCH-0089', smeCount: 8, totalAmount: 892000, status: 'Processing', createdAt: '2 hours ago' },
-  { id: 'BATCH-0088', smeCount: 2, totalAmount: 128750, status: 'Ready', createdAt: '3 hours ago' },
-];
-
-const mockTransactions = [
-  { id: 'TXN-70294', type: 'disbursement', entity: 'Apex Trading Sdn Bhd', amount: 128500, timestamp: '2026-04-25 14:32', ref: 'INV-2026-1047' },
-  { id: 'TXN-70293', type: 'repayment', entity: 'GreenLeaf Exports Pte Ltd', amount: 342000, timestamp: '2026-04-25 13:18', ref: 'INV-2026-0998' },
-  { id: 'TXN-70292', type: 'disbursement', entity: 'Borneo Spice Co.', amount: 215000, timestamp: '2026-04-25 12:05', ref: 'INV-2026-1044' },
-  { id: 'TXN-70291', type: 'fee', entity: 'Platform Service Fee', amount: 4750, timestamp: '2026-04-25 11:45', ref: 'FEE-AUTO-042' },
-  { id: 'TXN-70290', type: 'repayment', entity: 'Pacific Rim Metals', amount: 450000, timestamp: '2026-04-25 10:22', ref: 'INV-2026-0965' },
-  { id: 'TXN-70289', type: 'disbursement', entity: 'Sarawak Timber Works', amount: 178300, timestamp: '2026-04-25 09:50', ref: 'INV-2026-1040' },
-  { id: 'TXN-70288', type: 'repayment', entity: 'Zenith Logistics MY', amount: 67200, timestamp: '2026-04-25 09:15', ref: 'INV-2026-0990' },
-];
+import { getAdminLedger } from '../../lib/api';
 
 const batchStatusBadge = (status) => {
   switch (status) {
@@ -49,7 +33,29 @@ const txnTypeConfig = (type) => {
 };
 
 export default function MasterLedger() {
-  const [batches, setBatches] = useState(mockBatches);
+  const [batches, setBatches] = useState([]);
+  const [transactions, setTransactions] = useState([]);
+  const [metrics, setMetrics] = useState({ vaultBalance: 0, disbursedToday: 0, pendingSettlement: 0 });
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    async function load() {
+      setLoading(true);
+      try {
+        const data = await getAdminLedger();
+        if (data) {
+          setBatches(data.batches || []);
+          setTransactions(data.transactions || []);
+          setMetrics(data.metrics || {});
+        }
+      } catch {
+        // keep empty
+      } finally {
+        setLoading(false);
+      }
+    }
+    load();
+  }, []);
 
   const handleRelease = (id) => {
     setBatches((prev) =>
@@ -58,9 +64,9 @@ export default function MasterLedger() {
   };
 
   const topMetrics = [
-    { label: 'Vault balance', value: 'RM 8.2M', delta: 'Available for deployment', icon: Wallet, tone: 'from-emerald-500/20 to-emerald-400/5 text-emerald-100 border-emerald-400/15' },
-    { label: 'Disbursed today', value: 'RM 521.8k', delta: '12 transactions settled', icon: Banknote, tone: 'from-blue-600/25 to-blue-400/5 text-blue-100 border-blue-400/15' },
-    { label: 'Pending settlements', value: 'RM 1.72M', delta: '4 batches awaiting release', icon: Clock, tone: 'from-amber-500/20 to-amber-400/5 text-amber-100 border-amber-400/15' },
+    { label: 'Vault balance', value: `RM ${(metrics.vaultBalance / 1000000).toFixed(1)}M`, delta: 'Available for deployment', icon: Wallet, tone: 'from-emerald-500/20 to-emerald-400/5 text-emerald-100 border-emerald-400/15' },
+    { label: 'Disbursed today', value: `RM ${(metrics.disbursedToday / 1000).toFixed(1)}k`, delta: `${transactions.filter((t) => t.type === 'disbursement').length} transactions settled`, icon: Banknote, tone: 'from-blue-600/25 to-blue-400/5 text-blue-100 border-blue-400/15' },
+    { label: 'Pending settlements', value: `RM ${(metrics.pendingSettlement / 1000000).toFixed(2)}M`, delta: `${batches.length} batches awaiting release`, icon: Clock, tone: 'from-amber-500/20 to-amber-400/5 text-amber-100 border-amber-400/15' },
   ];
 
   return (
@@ -152,7 +158,7 @@ export default function MasterLedger() {
             <p className="mt-1 text-sm text-slate-400">Real-time transaction log across all treasury operations.</p>
           </div>
           <div className="space-y-3">
-            {mockTransactions.map((txn) => {
+            {transactions.map((txn) => {
               const config = txnTypeConfig(txn.type);
               const TxnIcon = config.icon;
               return (

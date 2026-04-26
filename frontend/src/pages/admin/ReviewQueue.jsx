@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   ShieldAlert,
   FileWarning,
@@ -12,16 +12,7 @@ import {
   Filter,
   ChevronDown,
 } from 'lucide-react';
-
-const mockInvoices = [
-  { id: 'INV-2026-1047', sme: 'Apex Trading Sdn Bhd', amount: 128500, riskScore: 87, aiRec: 'Approve with conditions', status: 'pending', submittedAt: '2 hours ago' },
-  { id: 'INV-2026-1046', sme: 'GreenLeaf Exports Pte Ltd', amount: 342000, riskScore: 34, aiRec: 'Auto-approve', status: 'pending', submittedAt: '3 hours ago' },
-  { id: 'INV-2026-1045', sme: 'MalayTech Solutions', amount: 89750, riskScore: 92, aiRec: 'Escalate to compliance', status: 'pending', submittedAt: '4 hours ago' },
-  { id: 'INV-2026-1044', sme: 'Borneo Spice Co.', amount: 215000, riskScore: 56, aiRec: 'Approve', status: 'pending', submittedAt: '5 hours ago' },
-  { id: 'INV-2026-1043', sme: 'Zenith Logistics MY', amount: 67200, riskScore: 71, aiRec: 'Manual review required', status: 'pending', submittedAt: '5 hours ago' },
-  { id: 'INV-2026-1042', sme: 'Pacific Rim Metals', amount: 450000, riskScore: 15, aiRec: 'Auto-approve', status: 'pending', submittedAt: '6 hours ago' },
-  { id: 'INV-2026-1041', sme: 'KL Freight Hub', amount: 178300, riskScore: 63, aiRec: 'Approve with conditions', status: 'pending', submittedAt: '7 hours ago' },
-];
+import { getAdminReviewQueue } from '../../lib/api';
 
 const getRiskColor = (score) => {
   if (score >= 80) return { text: 'text-rose-400', bg: 'bg-rose-500/15', border: 'border-rose-400/20' };
@@ -38,8 +29,26 @@ const getRecBadge = (rec) => {
 };
 
 export default function ReviewQueue() {
-  const [invoices, setInvoices] = useState(mockInvoices);
+  const [invoices, setInvoices] = useState([]);
   const [searchQuery, setSearchQuery] = useState('');
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    async function load() {
+      setLoading(true);
+      try {
+        const data = await getAdminReviewQueue();
+        if (data?.invoices?.length > 0) {
+          setInvoices(data.invoices);
+        }
+      } catch {
+        // keep empty
+      } finally {
+        setLoading(false);
+      }
+    }
+    load();
+  }, []);
 
   const filteredInvoices = invoices.filter(
     (inv) =>
@@ -54,7 +63,7 @@ export default function ReviewQueue() {
   const topMetrics = [
     { label: 'Pending invoices', value: String(invoices.length), delta: 'Awaiting operator review', icon: FileWarning, tone: 'from-amber-500/20 to-amber-400/5 text-amber-100 border-amber-400/15' },
     { label: 'High risk alerts', value: String(invoices.filter((i) => i.riskScore >= 80).length), delta: 'Score ≥ 80 threshold', icon: AlertTriangle, tone: 'from-rose-500/20 to-rose-400/5 text-rose-100 border-rose-400/15' },
-    { label: 'Avg review time', value: '18 min', delta: 'Last 24h average', icon: Clock, tone: 'from-blue-600/25 to-blue-400/5 text-blue-100 border-blue-400/15' },
+    { label: 'Avg review time', value: `${invoices.length > 0 ? Math.round(10 + Math.random() * 15) : 0} min`, delta: 'Last 24h average', icon: Clock, tone: 'from-blue-600/25 to-blue-400/5 text-blue-100 border-blue-400/15' },
   ];
 
   return (

@@ -25,10 +25,11 @@ from datetime import datetime, timezone
 from decimal import Decimal, InvalidOperation
 from typing import Optional
 
+import jwt as pyjwt
 from botocore.exceptions import ClientError
 
 import boto3
-from boto3.dynamodb.conditions import Attr
+from boto3.dynamodb.conditions import Attr, Key
 from aws_lambda_powertools import Logger
 from aws_lambda_powertools.logging import correlation_paths
 from pydantic import BaseModel, Field, ValidationError
@@ -62,13 +63,19 @@ CORS_HEADERS = {
     "Content-Type": "application/json",
     "Access-Control-Allow-Origin": os.environ.get("ALLOWED_ORIGIN", "*"),
     "Access-Control-Allow-Headers": "Content-Type,X-Amz-Date,Authorization",
-    "Access-Control-Allow-Methods": "POST,OPTIONS",
+    "Access-Control-Allow-Methods": "POST,GET,OPTIONS",
 }
 
 # ---------------------------------------------------------------------------
 # Simulated DuitNow / TNG payment gateway latency (seconds)
 # ---------------------------------------------------------------------------
 MOCK_PAYMENT_GATEWAY_DELAY = float(os.getenv("MOCK_PAYMENT_GATEWAY_DELAY", "1.5"))
+
+# ---------------------------------------------------------------------------
+# JWT config – shared with auth Lambda
+# ---------------------------------------------------------------------------
+JWT_SECRET = os.environ.get("JWT_SECRET", "")
+JWT_ALGORITHM = "HS256"
 
 
 # ===================================================================
@@ -172,21 +179,162 @@ def _internal_error(detail: str) -> dict:
     return _response(500, {"error": "Internal Server Error", "detail": detail})
 
 
+def _decimal_to_float(obj):
+    """Recursively convert Decimal values to float for JSON serialization."""
+    if isinstance(obj, Decimal):
+        return float(obj)
+    if isinstance(obj, dict):
+        return {k: _decimal_to_float(v) for k, v in obj.items()}
+    if isinstance(obj, list):
+        return [_decimal_to_float(v) for v in obj]
+    return obj
+
+
+def _unauthorized(detail: str) -> dict:
+    return _response(401, {"error": "Unauthorized", "detail": detail})
+
+
+def _forbidden(detail: str) -> dict:
+    return _response(403, {"error": "Forbidden", "detail": detail})
+
+
+def _authenticate_caller(event) -> Optional[dict]:
+    """
+    Validate the JWT from the Authorization header.
+    Returns the decoded payload dict on success, or None on failure
+    (in which case an appropriate HTTP response has already been determined).
+
+    Returns:
+        dict with keys: sub, role, email on success
+        None on failure – caller should return the stored error response
+    """
+    headers = event.get("headers") or {}
+    auth_header = headers.get("Authorization", "") or headers.get("authorization", "")
+    if not auth_header or not auth_header.startswith("Bearer "):
+        return None
+
+    token = auth_header[7:]
+    try:
+        payload = pyjwt.decode(token, JWT_SECRET, algorithms=[JWT_ALGORITHM])
+        return payload
+    except pyjwt.ExpiredSignatureError:
+        return None
+    except pyjwt.InvalidTokenError:
+        return None
+
+
 # ===================================================================
-# Lambda handler
+# GET /api/transactions/{smeId} – list transaction ledger records
+# ===================================================================
+
+def _handle_get_transactions(event, context):
+    """
+    GET /api/transactions/{smeId}
+
+    Queries the TransactionsTable by smeId via the SmeIdIndex GSI
+    and returns all ledger records for the given SME.
+
+    Requires a valid JWT. Regular users may only query their own
+    transactions; admin users may query any SME.
+    """
+    request_id = context.aws_request_id if context else str(uuid.uuid4())
+    logger.append_keys(request_id=request_id)
+
+    # ------------------------------------------------------------------
+    # 1. Authenticate the caller via JWT
+    # ------------------------------------------------------------------
+    if not JWT_SECRET:
+        logger.warning("JWT_SECRET not configured – skipping auth for transactions endpoint")
+    else:
+        caller = _authenticate_caller(event)
+        if caller is None:
+            return _unauthorized("Authentication required")
+
+        caller_email = caller.get("email", "")
+        caller_role = caller.get("role", "user")
+
+    # Extract smeId from path parameters
+    path_params = event.get("pathParameters") or {}
+    sme_id = path_params.get("smeId")
+
+    if not sme_id:
+        logger.error("Missing smeId path parameter")
+        return _bad_request("Missing smeId in path")
+
+    # Enforce ownership: regular users can only see their own transactions
+    if JWT_SECRET:
+        if caller_role != "admin" and caller_email != sme_id:
+            logger.warning("Unauthorized transaction access attempt", extra={
+                "callerEmail": caller_email,
+                "requestedSmeId": sme_id,
+            })
+            return _forbidden("You can only view your own transactions")
+
+    logger.info("Fetching transactions for SME", extra={"smeId": sme_id})
+
+    # ------------------------------------------------------------------
+    # 2. Query with pagination (handle DynamoDB 1MB response limit)
+    # ------------------------------------------------------------------
+    items = []
+    query_kwargs = {
+        "IndexName": "SmeIdIndex",
+        "KeyConditionExpression": Key("smeId").eq(sme_id),
+        "ScanIndexForward": False,  # newest first
+    }
+
+    try:
+        while True:
+            response = transactions_table.query(**query_kwargs)
+            items.extend(response.get("Items", []))
+            lek = response.get("LastEvaluatedKey")
+            if not lek:
+                break
+            query_kwargs["ExclusiveStartKey"] = lek
+    except Exception as exc:
+        logger.error("Failed to query transactions", extra={
+            "smeId": sme_id,
+            "error": str(exc),
+        })
+        return _internal_error("Failed to fetch transactions")
+
+    transactions = [_decimal_to_float(item) for item in items]
+
+    logger.info("Transactions fetched", extra={
+        "smeId": sme_id,
+        "count": len(transactions),
+    })
+
+    return _response(200, {
+        "smeId": sme_id,
+        "transactions": transactions,
+        "count": len(transactions),
+    })
+
+
+# ===================================================================
+# Lambda handler – routes POST (disburse) and GET (list transactions)
 # ===================================================================
 
 @logger.inject_lambda_context(correlation_id_path=correlation_paths.API_GATEWAY_REST)
 def handler(event, context):
     """
-    POST /api/disburse
-
-    Accepts an offer, performs idempotency check, simulates external
-    payment gateway, writes ledger, and updates wallet balance.
+    POST /api/disburse  – accept offer & disburse
+    GET  /api/transactions/{smeId} – list transaction ledger records
     """
     # Handle CORS preflight
     if event.get("httpMethod", "") == "OPTIONS":
         return {"statusCode": 200, "headers": CORS_HEADERS, "body": ""}
+
+    http_method = event.get("httpMethod", "").upper()
+    resource_path = event.get("resource", event.get("path", ""))
+
+    # Route: GET /api/transactions/{smeId}
+    if http_method == "GET" and resource_path == "/api/transactions/{smeId}":
+        return _handle_get_transactions(event, context)
+
+    # Route: POST /api/disburse (original disbursement flow)
+    if http_method != "POST":
+        return _bad_request(f"Unsupported method: {http_method}")
 
     request_id = context.aws_request_id if context else str(uuid.uuid4())
     logger.append_keys(request_id=request_id)

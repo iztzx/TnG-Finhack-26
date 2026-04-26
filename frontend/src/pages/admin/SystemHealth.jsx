@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   Activity,
   Server,
@@ -18,17 +18,26 @@ import {
   RefreshCw,
   Radio,
 } from 'lucide-react';
+import { getAdminSystemHealth } from '../../lib/api';
 
-const services = [
-  { name: 'Core API', description: 'REST + GraphQL gateway', status: 'Operational', ping: '12ms', uptime: '99.98%', icon: Server },
-  { name: 'Auth Service', description: 'AWS Cognito integration', status: 'Operational', ping: '8ms', uptime: '99.99%', icon: Shield },
-  { name: 'ML Scoring Engine', description: 'Risk assessment & fraud detection', status: 'Operational', ping: '45ms', uptime: '99.94%', icon: Brain },
-  { name: 'Database Cluster', description: 'DynamoDB primary + replicas', status: 'Operational', ping: '4ms', uptime: '99.99%', icon: Database },
-  { name: 'Document Parser', description: 'OCR & invoice extraction', status: 'Degraded', ping: '210ms', uptime: '98.72%', icon: Zap },
-  { name: 'Notification Service', description: 'Email, SMS & push delivery', status: 'Operational', ping: '18ms', uptime: '99.97%', icon: Radio },
-  { name: 'CDN / Static Assets', description: 'CloudFront edge distribution', status: 'Operational', ping: '3ms', uptime: '100%', icon: Wifi },
-  { name: 'Queue Processor', description: 'SQS event-driven workers', status: 'Operational', ping: '6ms', uptime: '99.96%', icon: Activity },
-];
+const iconMap = {
+  server: Server,
+  shield: Shield,
+  brain: Brain,
+  database: Database,
+  zap: Zap,
+  radio: Radio,
+  wifi: Wifi,
+  activity: Activity,
+};
+
+const eventIconMap = {
+  rocket: Rocket,
+  'alert-triangle': AlertTriangle,
+  bug: Bug,
+  database: Database,
+  'git-branch': GitBranch,
+};
 
 const statusConfig = (status) => {
   switch (status) {
@@ -50,20 +59,46 @@ const events = [
 
 export default function SystemHealth() {
   const [isRefreshing, setIsRefreshing] = useState(false);
+  const [services, setServices] = useState([]);
+  const [events, setEvents] = useState([]);
+  const [healthMetrics, setHealthMetrics] = useState({ operationalCount: 0, degradedCount: 0, totalServices: 0, avgLatency: 0 });
+  const [loading, setLoading] = useState(true);
 
-  const handleRefresh = () => {
-    setIsRefreshing(true);
-    setTimeout(() => setIsRefreshing(false), 1500);
+  useEffect(() => {
+    loadHealth();
+  }, []);
+
+  const loadHealth = async () => {
+    setLoading(true);
+    try {
+      const data = await getAdminSystemHealth();
+      if (data) {
+        setServices(data.services || []);
+        setEvents(data.events || []);
+        setHealthMetrics(data.metrics || {});
+      }
+    } catch {
+      // keep empty
+    } finally {
+      setLoading(false);
+    }
   };
 
-  const operationalCount = services.filter((s) => s.status === 'Operational').length;
-  const degradedCount = services.filter((s) => s.status === 'Degraded').length;
+  const handleRefresh = async () => {
+    setIsRefreshing(true);
+    await loadHealth();
+    setIsRefreshing(false);
+  };
+
+  const operationalCount = healthMetrics.operationalCount || services.filter((s) => s.status === 'Operational').length;
+  const degradedCount = healthMetrics.degradedCount || services.filter((s) => s.status === 'Degraded').length;
+  const avgLatency = healthMetrics.avgLatency || 0;
 
   const topMetrics = [
     { label: 'Services operational', value: `${operationalCount}/${services.length}`, delta: 'All systems monitored', icon: CheckCircle2, tone: 'from-emerald-500/20 to-emerald-400/5 text-emerald-100 border-emerald-400/15' },
     { label: 'Degraded services', value: String(degradedCount), delta: 'Requires attention', icon: AlertTriangle, tone: 'from-amber-500/20 to-amber-400/5 text-amber-100 border-amber-400/15' },
-    { label: 'Avg API latency', value: '14ms', delta: 'P50 across all endpoints', icon: Activity, tone: 'from-blue-600/25 to-blue-400/5 text-blue-100 border-blue-400/15' },
-    { label: 'Platform uptime', value: '99.97%', delta: 'Last 30 days', icon: Wifi, tone: 'from-violet-500/20 to-violet-400/5 text-violet-100 border-violet-400/15' },
+    { label: 'Avg API latency', value: `${avgLatency}ms`, delta: 'P50 across all endpoints', icon: Activity, tone: 'from-blue-600/25 to-blue-400/5 text-blue-100 border-blue-400/15' },
+    { label: 'Platform uptime', value: services.length > 0 ? `${(services.reduce((s, svc) => s + parseFloat(svc.uptime), 0) / services.length).toFixed(2)}%` : '—', delta: 'Last 30 days', icon: Wifi, tone: 'from-violet-500/20 to-violet-400/5 text-violet-100 border-violet-400/15' },
   ];
 
   return (
@@ -123,7 +158,7 @@ export default function SystemHealth() {
           {services.map((svc) => {
             const cfg = statusConfig(svc.status);
             const StatusIcon = cfg.icon;
-            const SvcIcon = svc.icon;
+            const SvcIcon = iconMap[svc.icon] || Server;
             return (
               <div key={svc.name} className="rounded-3xl border border-white/8 bg-white/[0.03] p-4 transition-colors hover:bg-white/[0.05]">
                 <div className="flex items-start justify-between gap-2">
@@ -155,7 +190,7 @@ export default function SystemHealth() {
         </div>
         <div className="space-y-3">
           {events.map((evt, idx) => {
-            const EvtIcon = evt.icon;
+            const EvtIcon = eventIconMap[evt.icon] || Rocket;
             return (
               <div key={idx} className="flex items-start gap-4 rounded-3xl border border-white/8 bg-white/[0.03] p-4 transition-colors hover:bg-white/[0.05]">
                 <div className={`mt-0.5 rounded-2xl border border-white/8 bg-white/[0.05] p-3 ${evt.accent}`}>

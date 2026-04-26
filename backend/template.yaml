@@ -241,6 +241,7 @@ Resources:
         Variables:
           INVOICES_TABLE: !Ref InvoicesTable
           OFFERS_TABLE: !Ref OffersTable
+          TRANSACTIONS_TABLE: !Ref TransactionsTable
           LOG_LEVEL: INFO
           ML_MODEL_DIR: /opt/python/ml/models
           ALLOWED_ORIGIN: !Ref AllowedOrigin
@@ -261,7 +262,7 @@ Resources:
       Cors:
         AllowMethods: "'POST,GET,OPTIONS'"
         AllowOrigin: !Sub "'${AllowedOrigin}'"
-        AllowHeaders: "'Content-Type,X-Amz-Date,Authorization'"
+        AllowHeaders: "'Content-Type,X-Amz-Date,Authorization,X-Request-ID'"
       MethodSettings:
         - ResourcePath: /*
           HttpMethod: '*'
@@ -298,6 +299,11 @@ Resources:
                 Action:
                   - dynamodb:PutItem
                 Resource: !GetAtt OffersTable.Arn
+              - Sid: WriteScoringTransactions
+                Effect: Allow
+                Action:
+                  - dynamodb:PutItem
+                Resource: !GetAtt TransactionsTable.Arn
 
   AuthFunction:
     Type: AWS::Serverless::Function
@@ -518,6 +524,7 @@ Resources:
           USERS_TABLE: !Ref UsersTable
           INVOICES_TABLE: !Ref InvoicesTable
           TRANSACTIONS_TABLE: !Ref TransactionsTable
+          JWT_SECRET: !Ref JwtSecret
           LOG_LEVEL: INFO
           MOCK_PAYMENT_GATEWAY_DELAY: "1.5"
           ALLOWED_ORIGIN: !Ref AllowedOrigin
@@ -529,6 +536,12 @@ Resources:
           Properties:
             Path: /api/disburse
             Method: POST
+            RestApiId: !Ref TnGApiGateway
+        TransactionsGet:
+          Type: Api
+          Properties:
+            Path: /api/transactions/{smeId}
+            Method: GET
             RestApiId: !Ref TnGApiGateway
 
   DisbursementFunctionRole:
@@ -570,6 +583,13 @@ Resources:
                 Action:
                   - dynamodb:PutItem
                 Resource: !GetAtt TransactionsTable.Arn
+              - Sid: QueryTransactionsBySme
+                Effect: Allow
+                Action:
+                  - dynamodb:Query
+                Resource:
+                  - !GetAtt TransactionsTable.Arn
+                  - !Sub "${TransactionsTable.Arn}/index/SmeIdIndex"
 
   ReconciliationFunction:
     Type: AWS::Serverless::Function
