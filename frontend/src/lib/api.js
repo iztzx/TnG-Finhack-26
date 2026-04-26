@@ -51,10 +51,17 @@ api.interceptors.request.use(
   (error) => Promise.reject(error),
 );
 
+// Track tab visibility to suppress spurious network-error toasts when the
+// browser suspends/restarts connections during tab switches (common on Vercel).
+let lastHiddenAt = 0;
+document.addEventListener('visibilitychange', () => {
+  if (document.visibilityState === 'hidden') lastHiddenAt = Date.now();
+});
+
 // Response interceptor – global error handling + toast + auth redirect
 api.interceptors.response.use(
   (response) => response,
-  (error) => {
+  async (error) => {
     const status = error.response?.status;
     const data = error.response?.data;
 
@@ -71,8 +78,37 @@ api.interceptors.response.use(
 
     // Build a human-readable message
     let message;
-    if (!error.response && error.request) {
+    const isNetworkError = !error.response && error.request;
+    const recentlyUnhidden = Date.now() - lastHiddenAt < 5000; // 5s grace after tab switch
+
+    if (isNetworkError) {
+      // Retry once for transient network errors (common when switching tabs on Vercel
+      // where the browser suspends connections and they don't always resume cleanly)
+      const config = error.config;
+      if (!config.__retried && recentlyUnhidden) {
+        config.__retried = true;
+        try {
+          return await api.request(config);
+        } catch (retryErr) {
+          // Retry also failed – handle below
+          if (!retryErr.response && retryErr.request) {
+            retryErr.friendlyMessage = 'Network error – please check your connection and try again.';
+            retryErr.statusCode = undefined;
+            // Suppress toast during tab-switch grace period
+            if (!recentlyUnhidden) emitToast('error', retryErr.friendlyMessage);
+            return Promise.reject(retryErr);
+          }
+          // Retry returned a proper error response – reject with it
+          return Promise.reject(retryErr);
+        }
+      }
       message = 'Network error – please check your connection and try again.';
+      // Suppress toast during tab-switch grace period – the page is still loading
+      if (recentlyUnhidden) {
+        error.friendlyMessage = message;
+        error.statusCode = undefined;
+        return Promise.reject(error);
+      }
     } else if (status >= 500) {
       message = data?.detail || data?.error || 'Server error – please try again later.';
     } else if (status === 409) {
