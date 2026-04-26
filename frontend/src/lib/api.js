@@ -53,9 +53,12 @@ api.interceptors.request.use(
 
 // Track tab visibility to suppress spurious network-error toasts when the
 // browser suspends/restarts connections during tab switches (common on Vercel).
-let lastHiddenAt = 0;
+// We measure the grace period from when the tab becomes visible again, not
+// from when it was hidden — otherwise a long absence (>5s) would expire the
+// grace period before the user even returns.
+let lastVisibleAt = 0;
 document.addEventListener('visibilitychange', () => {
-  if (document.visibilityState === 'hidden') lastHiddenAt = Date.now();
+  if (document.visibilityState === 'visible') lastVisibleAt = Date.now();
 });
 
 // Response interceptor – global error handling + toast + auth redirect
@@ -79,7 +82,7 @@ api.interceptors.response.use(
     // Build a human-readable message
     let message;
     const isNetworkError = !error.response && error.request;
-    const recentlyUnhidden = Date.now() - lastHiddenAt < 5000; // 5s grace after tab switch
+    const recentlyUnhidden = Date.now() - lastVisibleAt < 5000; // 5s grace after tab switch
 
     if (isNetworkError) {
       // Retry once for transient network errors (common when switching tabs on Vercel
@@ -142,9 +145,37 @@ const alibabaApi = axios.create({
 
 alibabaApi.interceptors.response.use(
   (response) => response,
-  (error) => {
+  async (error) => {
     const status = error.response?.status;
     const data = error.response?.data;
+
+    // Tab-switch resilience — same protection as the main api instance
+    const isNetworkError = !error.response && error.request;
+    const recentlyUnhidden = Date.now() - lastVisibleAt < 5000;
+
+    if (isNetworkError) {
+      const config = error.config;
+      if (!config.__retried && recentlyUnhidden) {
+        config.__retried = true;
+        try {
+          return await alibabaApi.request(config);
+        } catch (retryErr) {
+          if (!retryErr.response && retryErr.request) {
+            retryErr.friendlyMessage = 'Network error – please check your connection and try again.';
+            retryErr.statusCode = undefined;
+            if (!recentlyUnhidden) emitToast('error', retryErr.friendlyMessage);
+            return Promise.reject(retryErr);
+          }
+          return Promise.reject(retryErr);
+        }
+      }
+      // Suppress toast during the 5s grace period after tab becomes visible
+      if (recentlyUnhidden) {
+        error.friendlyMessage = 'Network error – please check your connection and try again.';
+        error.statusCode = undefined;
+        return Promise.reject(error);
+      }
+    }
 
     // Surface the AWS rejection detail when Alibaba FC forwards the error
     let message = data?.message || data?.error || 'Alibaba Cloud upload failed – please try again.';
