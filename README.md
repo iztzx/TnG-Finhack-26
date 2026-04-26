@@ -1,177 +1,220 @@
-# TnG Logistics Finance Platform
+# OUT&IN — AI-Powered Invoice Financing Platform
 
-**Flexport alternative: GPS-powered supply chain financing for Malaysian exporters and logistics operators**
+**Invoice Financing at the Speed of AI** — Multi-cloud supply chain capital for Malaysian SMEs
 
-Group: Indecisive | FinHack 26
+Group: Indecisive | TnG FinHack 26
 
 ---
 
-## 📋 Overview
+## Overview
 
-The TnG Logistics Finance Platform is a fintech solution that revolutionizes supply chain financing by underwriting **shipping routes and GPS-tracked shipments** instead of traditional business owner creditworthiness. We combine real-time GPS tracking, satellite imagery monitoring, and AI risk assessment to offer instant credit to exporters, importers, and logistics companies based on their cargo and delivery route data.
+OUT&IN is a multi-cloud fintech platform that advances up to **95% of invoice value in seconds**, not months. It combines **Alibaba Cloud Document AI** (Qwen VL models) for instant invoice extraction, **AWS Lambda** for ML credit scoring and idempotent disbursement, and **real-time shipment tracking** (satellite imagery, carrier APIs, customs events) to underwrite shipments — not business owners.
 
 **Key Features:**
-- 🚚 **Route-Based Underwriting** - Credit scoring based on shipping routes, not business owners (no HITA)
-- 📍 **Real-Time Shipment Tracking** - GPS-enabled satellite/GPS monitoring across Malaysia, Singapore, and regional routes
-- ⚡ **Instant Invoice Financing** - Quick credit against shipments and invoices (support for export financing)
-- 🤖 **Supply Chain AI** - ML models trained on shipment data, customs clearance, and logistics patterns
-- 📊 **Live Logistics Dashboard** - Real-time KPI tracking for shipments, routes, and credit portfolio
-- 🛰️ **Satellite Imagery Monitoring** - Visual cargo verification and location tracking via satellite feeds
-- 🌐 **Multi-Carrier Support** - Maersk, DHL, FedEx, CMA CGM, and local Malaysia carriers with API integration
-- 📱 **WebSocket Live Updates** - Real-time shipment status and transaction feeds
+- **Multi-Cloud Architecture** — Alibaba Cloud (Document AI + AI Chat) + AWS (Scoring + Disbursement + Email)
+- **Instant Invoice Extraction** — Upload a PDF/image, Qwen VL extracts amount, merchant, dates in seconds
+- **Route-Based Underwriting** — Credit scoring based on shipment routes and cargo data, not HITA
+- **Idempotent Disbursement** — Atomic wallet balance updates via DynamoDB ADD with rollback on failure
+- **AI Finance Assistant** — Qwen-powered chatbot for trade finance questions + executive summaries
+- **Real-Time Shipment Tracking** — GPS, satellite imagery, customs events, carrier APIs across SE Asia
+- **Notice of Assignment** — Automated buyer notification emails via AWS SES with PDF attachment
+- **Admin Command Center** — Full admin panel for treasury, approvals, risk operations, and audit
+- **JWT Authentication** — Registration, login, profile management, password reset/change
+- **Excel Reconciliation** — Download formatted transaction reports for accounting
 
 ---
 
-## 🚀 Why TnG Logistics Finance?
-
-### Problem with Traditional SME Lending (HITA)
-
-Traditional hire-purchase (HITA) underwriting focuses on:
-- ❌ Business owner's personal credit history
-- ❌ Collateral tied to fixed assets (equipment, vehicles)
-- ❌ Long approval cycles (2-4 weeks)
-- ❌ High default rates due to owner financial stress
-- ❌ No visibility into actual shipment risk
-
-### Our Solution: Route-Based Underwriting
-
-✅ **Real collateral visibility** - Satellite imagery and carrier API tracking confirms cargo exists and value
-✅ **Faster approval** - Route AI scoring in <100ms
-✅ **Lower default risk** - Shipment completion is objective, measurable
-✅ **Better economics** - Finance the shipment, not the business owner
-✅ **Export enablement** - Quick credit for exporters at point of shipment
-
-### Competitive Advantages vs Flexport
-
-| Feature | Flexport | TnG Logistics Finance |
-|---------|----------|----------------------|
-| **Financing Model** | Freight forwarding → separate financing | Integrated supply chain finance |
-| **Underwriting** | Business owner focus | Route-based, shipment-centric |
-| **Approval Speed** | Days | Minutes (via AI) |
-| **Regional Focus** | Global | Southeast Asia (optimized) |
-| **GPS Integration** | Optional partner | Carrier API + Satellite |
-| **Regulatory** | Complex cross-border | Malaysia-centric compliance |
-| **Target Market** | Large exporters | SME exporters & importers |
-
----
-
-## 🏗️ Architecture
+## Architecture
 
 ```
-TnG Logistics Finance Platform
-├── Shipment Tracking (GPS + Satellite)
-├── Route Intelligence Engine (ML Risk Assessment)
-├── Frontend Dashboard (Real-time Logistics View)
-├── Backend (AWS Lambda + Invoice Processing)
-├── ML Pipeline (Route/Cargo-based Risk Scoring)
-└── Carrier & Customs Integration
+                              OUT&IN Platform
+                                    │
+            ┌───────────────────────┼───────────────────────┐
+            │                       │                       │
+     Alibaba Cloud             AWS Cloud               Frontend
+            │                       │                       │
+  ┌─────────┴─────────┐  ┌───────┴────────┐       ┌───────┴───────┐
+  │ Function Compute   │  │ Lambda Functions│       │ React + Vite  │
+  │ ─ invoice-upload   │  │ ─ auth          │       │ ─ Landing     │
+  │ ─ Qwen VL (OCR)   │  │ ─ invoice-webhook│      │ ─ Dashboard   │
+  │ ─ Qwen (Chat)     │  │ ─ credit-scoring│       │ ─ Financing   │
+  │ ─ Qwen (Summary)  │  │ ─ disburse      │       │ ─ Shipments   │
+  │                    │  │ ─ send-email    │       │ ─ Admin Panel │
+  │ DashScope API      │  │ ─ reconciliation│       │ ─ AI Assistant│
+  │ ─ qwen-vl-max      │  │                 │       │ ─ Profile     │
+  │ ─ qwen-plus        │  │ DynamoDB        │       └───────────────┘
+  │ ─ qwen-vl-ocr      │  │ ─ users         │              │
+  │                    │  │ ─ invoices      │       Vercel (CDN)
+  │ S3 (invoices)      │  │ ─ offers        │
+  └────────────────────┘  │ ─ transactions  │
+            │              │                 │
+            └───── POST ──▶│ SES (email)     │
+              webhook       └─────────────────┘
+```
+
+### Multi-Cloud Financing Flow (3 Phases)
+
+```
+Phase 1 — INGESTION (Alibaba Cloud)            Phase 2 — SCORING (AWS)              Phase 3 — DISBURSEMENT (AWS)
+──────────────────────────────────             ─────────────────────              ────────────────────────────
+SME uploads invoice (PDF/JPG/PNG)              Webhook Lambda receives              SME accepts offer
+        │                                      extracted data                              │
+        ▼                                              ▼                                  ▼
+Qwen VL extracts:                              Persists to DynamoDB                 Idempotency check
+  • Amount, Currency                           (InvoicesTable)                      (no double-disburse)
+  • Merchant, Buyer                            Runs ML scoring                            │
+  • Invoice#, Dates                           Persists Offer (OffersTable)               ▼
+        │                                              │                        Atomic status transition
+        ▼                                              ▼                        (PENDING → ACCEPTED)
+POST to AWS webhook                            Returns offer to frontend                    │
+(invoiceId + extractedData)                                                              ▼
+        │                                     SME sees offer on                   DuitNow mock payment
+        ▼                                     Financing page                            │
+Frontend displays                               │                                  ▼
+extraction result                               ▼                          Write transaction ledger
+                                        Accept / Reject                          (TransactionsTable)
+                                                                                 │
+                                                                                 ▼
+                                                                      Atomic wallet balance update
+                                                                      (DynamoDB ADD expression)
+                                                                                 │
+                                                                                 ▼
+                                                                      Send Notice of Assignment
+                                                                      (SES email to buyer)
 ```
 
 ### Component Breakdown
 
-| Component | Tech Stack | Purpose |
-|-----------|-----------|---------|
-| **Frontend** | React 19 + Vite + Tailwind CSS | Shipment tracking dashboard & invoicing UI |
-| **Backend** | AWS Lambda + SAM | Invoice financing, shipment verification |
-| **ML** | scikit-learn + pandas | Route risk scoring & cargo assessment |
-| **Tracking** | GPS API + Webhooks | Real-time shipment telemetry |
-| **Deployment** | AWS CloudFormation | Infrastructure as Code |
-
-### Supply Chain Financing Flow
-
-```
-Exporter/Importer
-        ↓
-    [Shipment Created + GPS Tracking]
-        ↓
-    [Route & Cargo Assessment]
-        ↓
-    [AI Risk Score Based on Route/Shipment Data]
-        ↓
-    [Invoice/Shipment Financing Offer]
-        ↓
-    [Instant Credit Disbursement]
-        ↓
-    [Real-time Tracking Until Delivery]
-```
+| Component | Cloud | Tech Stack | Purpose |
+|-----------|-------|-----------|---------|
+| **Frontend** | Vercel | React 19 + Vite + Tailwind CSS 4 | SME dashboard, financing, admin panel |
+| **Invoice Upload** | Alibaba Cloud | Function Compute + Qwen VL | Document AI extraction from invoices |
+| **AI Chat** | Alibaba Cloud | Function Compute + Qwen | Finance assistant & executive summaries |
+| **Auth** | AWS | Lambda + DynamoDB + JWT | Registration, login, password management |
+| **Invoice Webhook** | AWS | Lambda + DynamoDB + Pydantic | Receive extracted data, persist, run ML scoring |
+| **Credit Scoring** | AWS | Lambda + scikit-learn | Route-based risk scoring & analytics |
+| **Disbursement** | AWS | Lambda + DynamoDB | Idempotent fund disbursement + wallet update |
+| **Email** | AWS | Lambda + SES | Notice of Assignment to buyers |
+| **Reconciliation** | AWS | Lambda + openpyxl | Excel transaction reports |
+| **ML Pipeline** | Local | scikit-learn + pandas | Model training on synthetic SME data |
 
 ---
 
-## 📁 Project Structure
+## Project Structure
 
 ```
 TnG-Finhack-26/
-├── frontend/                    # React + Vite application
+├── frontend/                        # React 19 + Vite + Tailwind CSS 4
 │   ├── src/
-│   │   ├── components/         # Reusable UI components
-│   │   │   ├── TransactionTable.jsx    # Invoice/shipment financing table
-│   │   │   ├── RiskGauge.jsx           # Route risk visualization
-│   │   │   └── ...
-│   │   ├── pages/              # Page components
-│   │   │   ├── Dashboard.jsx       # Main logistics overview
-│   │   │   ├── Shipments.jsx       # Real-time shipment tracking
-│   │   │   ├── Financing.jsx       # Invoice financing products
-│   │   │   ├── Transactions.jsx    # Financing history
-│   │   │   └── ...
-│   │   ├── hooks/              # Custom React hooks
-│   │   │   └── useWebSocket.js     # Real-time shipment updates
-│   │   ├── lib/                # Utilities
-│   │   │   ├── api.js              # Shipment tracking & invoice APIs
-│   │   │   └── constants.js        # WS URLs, endpoints
-│   │   └── App.jsx
-│   ├── vite.config.js
+│   │   ├── pages/
+│   │   │   ├── Landing.jsx              # Marketing hero page
+│   │   │   ├── Login.jsx                # JWT login
+│   │   │   ├── Register.jsx             # SME registration
+│   │   │   ├── Dashboard.jsx            # Financial overview + cash flow
+│   │   │   ├── Financing.jsx            # Invoice upload → AI extraction → offer → accept
+│   │   │   ├── Shipments.jsx            # GPS tracking, customs, waypoints
+│   │   │   ├── Transactions.jsx         # Disbursement history
+│   │   │   ├── ComplianceHub.jsx        # Regulatory & customs status
+│   │   │   ├── Analytics.jsx            # Route analytics, risk charts
+│   │   │   ├── ArchitectureDiagram.jsx  # Multi-cloud architecture visualization
+│   │   │   ├── AIAssistant.jsx          # Qwen-powered finance chatbot
+│   │   │   ├── Profile.jsx              # User profile & settings
+│   │   │   └── admin/                   # Admin Command Center
+│   │   │       ├── CommandCenter.jsx     # Treasury & approval overview
+│   │   │       ├── ReviewQueue.jsx       # Pending invoice reviews
+│   │   │       ├── SMEList.jsx           # SME directory
+│   │   │       ├── MasterLedger.jsx      # Transaction ledger
+│   │   │       ├── SystemHealth.jsx      # Infrastructure monitoring
+│   │   │       └── AuditLog.jsx          # Immutable audit trail
+│   │   ├── components/
+│   │   │   ├── Sidebar.jsx              # SME navigation sidebar
+│   │   │   ├── RiskGauge.jsx            # Risk score visualization
+│   │   │   ├── TransactionTable.jsx     # Financing history table
+│   │   │   ├── ComplianceBadge.jsx      # Customs/verification badges
+│   │   │   ├── CreditAnimation.jsx       # Disbursement animations
+│   │   │   ├── ToastContainer.jsx        # Global error/success toasts
+│   │   │   ├── KPICard.jsx              # Dashboard KPI cards
+│   │   │   ├── ErrorBoundary.jsx        # React error boundary
+│   │   │   ├── TriggerButton.jsx        # Demo trigger
+│   │   │   ├── auth/                    # ProtectedRoute, AdminRoute, AuthLayout
+│   │   │   └── admin/                   # AdminSidebar
+│   │   ├── context/
+│   │   │   └── AuthContext.jsx           # JWT auth state + session management
+│   │   ├── hooks/
+│   │   │   └── useWebSocket.js          # Real-time shipment updates
+│   │   ├── lib/
+│   │   │   ├── api.js                   # All API calls (Alibaba + AWS)
+│   │   │   └── constants.js             # API URLs, polling config
+│   │   ├── scripts/
+│   │   │   └── demo.js                  # Demo seed data
+│   │   ├── App.jsx                      # Routes (SME + Admin)
+│   │   └── main.jsx
+│   ├── vercel.json                      # SPA rewrites for Vercel
 │   └── package.json
 │
-├── backend/                     # AWS Lambda functions
-│   ├── lambda/
-│   │   ├── credit-scoring/     # Route & shipment risk scoring
-│   │   │   ├── handler.py
-│   │   │   │   ├── handle_shipment_track()     # Track shipment locations
-│   │   │   │   ├── handle_shipment_verify()    # Verify cargo integrity
-│   │   │   │   ├── handle_invoice_upload()     # Process shipment invoices
-│   │   │   │   ├── handle_invoice_analyze()    # Route-based risk assessment
-│   │   │   │   ├── handle_invoice_offer()      # Generate financing offers
-│   │   │   │   └── handle_invoice_accept()     # Disburse funds
-│   │   │   └── requirements.txt (boto3)
-│   │   └── excel-reconciliation/# Export data reconciliation
-│   ├── template.yaml           # SAM CloudFormation template
-│   ├── samconfig.toml          # SAM configuration
-│   └── scripts/
-│       ├── deploy.ps1          # PowerShell deployment script
-│       └── seed-data.py        # Load test shipment data
+├── alibaba/                            # Alibaba Cloud Function Compute
+│   ├── function-compute/invoice-upload/
+│   │   ├── index.py                     # Main WSGI handler (upload + chat + summary)
+│   │   ├── app.py                       # Flask app (local dev)
+│   │   ├── PyPDF2/                      # PDF text extraction
+│   │   ├── dashscope/                   # DashScope SDK
+│   │   └── requirements.txt
+│   ├── s.yaml                           # Serverless Devs config (FC3)
+│   ├── .env                             # DASHSCOPE_API_KEY, AWS_WEBHOOK_URL
+│   └── deploy.sh                        # One-command deploy
 │
-├── ml/                          # Machine Learning pipeline
-│   ├── train_model.py          # Train route risk model
-│   ├── feature_engineering.py  # Extract shipment/route features
-│   ├── predict.py              # Score new shipment routes
-│   ├── lambda_handler.py       # Lambda integration for real-time scoring
-│   ├── lambda_layer/           # ML dependencies for Lambda
-│   ├── models/                 # Trained model artifacts
-│   ├── data/                   # Synthetic shipment dataset
-│   │   └── synthetic_sme_data.csv  # 10k+ shipment records
+├── backend/                            # AWS Lambda + SAM
+│   ├── lambda/
+│   │   ├── auth/                        # JWT auth (register, login, me, password mgmt)
+│   │   ├── invoice-webhook/             # Receives Alibaba AI data, persists, scores, creates offer
+│   │   ├── credit-scoring/              # Legacy scoring, shipment tracking, analytics
+│   │   ├── disburse/                    # Idempotent disbursement + atomic wallet update
+│   │   ├── send-email/                  # Notice of Assignment via SES
+│   │   └── excel-reconciliation/        # Excel report generation
+│   ├── template.yaml                    # SAM CloudFormation (6 Lambdas + 7 DynamoDB tables + S3)
+│   ├── samconfig.toml
+│   └── scripts/
+│       ├── deploy.ps1                   # PowerShell deployment
+│       ├── seed-data.py                 # Load test data
+│       └── update-demo-passwords.py
+│
+├── ml/                                 # Machine Learning pipeline
+│   ├── train_model.py                  # Train credit classifier + regressor
+│   ├── feature_engineering.py          # SME feature extraction
+│   ├── predict.py                      # Score new applications
+│   ├── lambda_handler.py               # Lambda integration
+│   ├── lambda_layer/python/ml/          # ML dependencies for Lambda
+│   ├── models/                         # Trained model artifacts
+│   │   ├── credit_classifier.pkl
+│   │   ├── credit_regressor.pkl
+│   │   ├── feature_importances.json
+│   │   └── feature_names.json
+│   ├── data/
+│   │   └── synthetic_sme_data.csv       # 10k+ synthetic SME records
+│   ├── generate_synthetic_data.py
 │   └── requirements.txt
 │
-
-└── docs/                        # Documentation
-    ├── demo-script.md          # 3.5-min demo walkthrough
-    └── qa-prep.md              # Testing guide
+└── docs/
+    ├── demo-script.md                  # Demo walkthrough
+    ├── qa-prep.md                      # Testing guide
+    ├── cloudshell-deployment.md        # AWS CloudShell deploy
+    └── multi-cloud-setup.md            # Multi-cloud configuration
 ```
 
 ---
 
-## 🚀 Getting Started
+## Getting Started
 
 ### Prerequisites
 
-- **Node.js** 18+ (for frontend)
-- **Python** 3.9+ (for backend & ML)
+- **Node.js** 18+ (frontend)
+- **Python** 3.9+ (backend & ML)
 - **AWS CLI** configured with credentials
-- **AWS SAM CLI** (for Lambda deployment)
+- **AWS SAM CLI** (Lambda deployment)
+- **Alibaba Cloud CLI** + Serverless Devs (`s`) (FC deployment)
 - **Git** for version control
 
-### Quick Start (Local Development)
-
-#### 1. **Frontend Setup**
+### 1. Frontend Setup
 
 ```bash
 cd frontend
@@ -179,686 +222,235 @@ npm install
 npm run dev
 ```
 
-Dashboard available at `http://localhost:5173` — shows shipment tracking, financing offers, and live route analytics.
+Dashboard at `http://localhost:5173`
 
-#### 3. **Backend Setup (AWS Lambda)**
+### 2. Backend Setup (AWS Lambda)
 
 ```bash
 cd backend
 
-# Review SAM configuration
-cat samconfig.toml
-
-# Deploy using PowerShell
-.\scripts\deploy.ps1
-
-# Or manually with SAM
+# Deploy with SAM
 sam build
-sam deploy
+sam deploy --guided
+
+# Or use PowerShell script
+.\scripts\deploy.ps1
 ```
 
-#### 4. **ML Model Setup** (Optional - pre-trained models included)
+### 3. Alibaba Cloud Function Compute
+
+```bash
+cd alibaba
+
+# Set environment variables
+cp .env.example .env
+# Edit .env with your DASHSCOPE_API_KEY and AWS_WEBHOOK_URL
+
+# Deploy with Serverless Devs
+s deploy
+```
+
+### 4. ML Model Setup (Optional — pre-trained models included)
 
 ```bash
 cd ml
-
-# Install dependencies
 pip install -r requirements.txt
-
-# Train on synthetic shipment data (generates new models/)
 python train_model.py
-
-# Create Lambda layer for deployment
 python create_lambda_layer.py
 ```
 
-### Quick Access
+### Environment Variables
 
-- **Frontend:** `http://localhost:5173`
-- **WebSocket:** `ws://localhost:8000/ws` (for live shipment updates)
-- **Lambda Local:** `sam local start-api` (at `http://localhost:3000`)
-
----
-
-## 🎯 Key Features & Pages
-
-### Dashboard: Supply Chain Finance Overview
-- **Live Shipment KPIs**: Total credits issued, active routes, delivery success rate
-- **Route Risk Distribution**: Visual breakdown of credit risk by shipping corridor (Malaysia-Singapore-Thailand, etc.)
-- **Customs Status Monitor**: Real-time clearance tracking across ports
-- **Financing Pipeline**: Pending invoices, approved shipments, and disbursed amounts
-
-### Pages
-
-| Page | Description |
-|------|-------------|
-| **Dashboard** | Live supply chain finance metrics and shipment overview |
-| **Shipments** | Real-time GPS tracking, customs status, cargo integrity (temp/humidity), waypoints |
-| **Transactions** | Financing history, invoice status, payouts, and audit trail |
-| **Financing** | Create shipment finance requests, upload invoices, view offers |
-| **Analytics** | Route performance, risk by corridor, delivery metrics, carrier statistics |
-| **Compliance Hub** | Customs requirements, documentation status, regulatory alerts |
-
-### Key UI Components
-
-- **ShipmentsTracker** - Multi-waypoint route visualization with real-time GPS
-- **RiskGauge** - Route risk scoring visualization (0-1000 scale)
-- **TransactionTable** - Financing offers and shipment status sortable table
-- **ComplianceBadge** - Customs clearance and documentation status
-- **CreditAnimation** - Approval notifications with visual feedback
-
----
-
-## 🔌 API Integration
-
-### WebSocket Connection (Real-Time Tracking)
-
-Live shipment updates pushed via WebSocket (see `hooks/useWebSocket.js`):
-
-```javascript
-const socket = useWebSocket('ws://localhost:8000/ws');
-// Receives: shipment locations, satellite imagery, customs status updates, financing offers
+**Frontend (`.env`):**
+```env
+VITE_API_BASE_URL=https://YOUR-API-ID.execute-api.ap-southeast-1.amazonaws.com/dev
+VITE_ALIBABA_FC_URL=https://YOUR-FC-ID.ap-southeast-3.fcapp.run
+VITE_WS_URL=wss://your-ws-endpoint
+VITE_REQUEST_TIMEOUT=30000
 ```
 
-### REST API Endpoints
+**Alibaba Cloud (`.env`):**
+```env
+DASHSCOPE_API_KEY=sk-your-key
+DASHSCOPE_VISION_MODEL=qwen-vl-max
+DASHSCOPE_DOC_MODEL=qwen-plus
+AWS_WEBHOOK_URL=https://YOUR-API-ID.execute-api.ap-southeast-1.amazonaws.com/dev/api/webhook/invoice-parsed
+```
 
-Configured in `lib/api.js`:
-
-**Shipment Tracking:**
-- `POST /shipment/track` - Get real-time shipment location and status
-- `POST /shipment/verify` - Verify cargo integrity (sensor readings)
-
-**Invoice Financing:**
-- `POST /invoices/upload` - Upload shipment invoice for financing
-- `POST /invoices/analyze` - Analyze invoice + route risk (returns AI score)
-- `POST /invoices/offer` - Generate financing offer (advance rate, fees)
-- `POST /invoices/accept` - Accept offer and disburse funds
-- `GET /invoices/{userId}` - List all invoices and financing status
-
-**Risk Scoring:**
-- `POST /credit-score` - Score shipment route based on cargo, origin, destination
-- `GET /transactions` - Financing transaction history
+**AWS Lambda** (set via SAM `--parameter-overrides` or `samconfig.toml`):
+```env
+JwtSecret=your-jwt-secret-min-16-chars
+AllowedOrigin=https://your-frontend.vercel.app
+```
 
 ---
 
-## 🤖 Machine Learning Pipeline
+## Pages & Features
+
+### SME Portal
+
+| Page | Route | Description |
+|------|-------|-------------|
+| **Landing** | `/` | Marketing hero — "Invoice Financing at the Speed of AI" |
+| **Login** | `/login` | JWT authentication |
+| **Register** | `/register` | SME onboarding with company details |
+| **Dashboard** | `/dashboard` | Financial overview, cash flow, KPIs |
+| **Financing** | `/financing` | Upload invoice → AI extraction → offer → accept flow |
+| **Shipments** | `/shipments` | Real-time GPS tracking, customs status, waypoints |
+| **Transactions** | `/transactions` | Disbursement history & ledger |
+| **Compliance** | `/compliance` | Regulatory status, customs, documentation |
+| **Analytics** | `/analytics` | Route performance, risk charts, carrier stats |
+| **Architecture** | `/architecture` | Multi-cloud architecture visualization |
+| **AI Assistant** | `/assistant` | Qwen-powered finance chatbot |
+| **Profile** | `/profile` | User settings, password management |
+
+### Admin Command Center
+
+| Page | Route | Description |
+|------|-------|-------------|
+| **Command Center** | `/admin/dashboard` | Treasury overview, action queue, operator snapshot |
+| **Review Queue** | `/admin/review` | Pending invoice reviews with AI recommendations |
+| **SME List** | `/admin/users` | SME directory with KYC status |
+| **Master Ledger** | `/admin/ledger` | Full transaction ledger & batch disbursement |
+| **System Health** | `/admin/system` | Infrastructure monitoring & service status |
+| **Audit Log** | `/admin/audit` | Immutable audit trail with severity filters |
+
+---
+
+## API Reference
+
+### Multi-Cloud API Flow
+
+| Phase | Endpoint | Cloud | Description |
+|-------|----------|-------|-------------|
+| 1 — Ingestion | `POST /` (FC) | Alibaba | Upload invoice, AI extraction, forward to AWS |
+| 1 — AI Chat | `POST /chat` (FC) | Alibaba | Qwen finance assistant |
+| 1 — Summary | `POST /summary` (FC) | Alibaba | Executive summary generation |
+| 2 — Scoring | `POST /api/webhook/invoice-parsed` | AWS | Receive AI data, persist, score, create offer |
+| 2 — Offer | `POST /api/invoice/offer` | AWS | Retrieve financing offer |
+| 3 — Disburse | `POST /api/disburse` | AWS | Idempotent disbursement + wallet update |
+| 3 — Ledger | `GET /api/transactions/{smeId}` | AWS | Transaction history |
+| Email | `POST /api/email/send-assignment-notice` | AWS | Notice of Assignment to buyer |
+| Auth | `POST /api/auth/register` | AWS | SME registration |
+| Auth | `POST /api/auth/login` | AWS | JWT login |
+| Auth | `GET /api/auth/me` | AWS | Get profile |
+| Auth | `POST /api/auth/forgot-password` | AWS | Password reset flow |
+| Auth | `POST /api/auth/change-password` | AWS | Change password |
+| Auth | `PUT /api/auth/profile` | AWS | Update profile |
+| Report | `GET /reconciliation/download` | AWS | Excel reconciliation report |
+| Scoring | `POST /credit-score` | AWS | Legacy credit scoring |
+| Tracking | `POST /shipment/track` | AWS | Shipment location tracking |
+| Tracking | `POST /shipment/verify` | AWS | Shipment verification |
+
+---
+
+## Machine Learning Pipeline
 
 ### Workflow
 
-1. **Data Generation** - `generate_synthetic_data.py` creates realistic shipment datasets
-2. **Feature Engineering** - `feature_engineering.py` extracts route, cargo, and logistics features
-3. **Model Training** - `train_model.py` trains scikit-learn ensemble models on shipment risk
-4. **Prediction** - `predict.py` scores new shipment routes in real-time
-5. **Lambda Integration** - `lambda_handler.py` serves predictions via AWS API
-
-### Model Artifacts
-
-```
-models/
-├── feature_names.json        # Feature list (route, cargo, carrier attributes)
-├── feature_importances.json  # Feature weights
-└── trained_model.pkl         # Trained classifier (scikit-learn ensemble)
-```
+1. **Data Generation** — `generate_synthetic_data.py` creates 10k+ SME records
+2. **Feature Engineering** — `feature_engineering.py` extracts: txn volume, avg size, tenure, tracking reliability, payment consistency, revenue, industry sector
+3. **Model Training** — `train_model.py` trains scikit-learn ensemble (classifier + regressor)
+4. **Prediction** — `predict.py` scores new applications in real-time
+5. **Lambda Integration** — `lambda_handler.py` serves predictions via AWS API
 
 ### Risk Scoring Features
 
-The model assesses **shipment route risk** based on:
-
-**Route Characteristics:**
-- Origin and destination ports/cities
-- Distance and duration
-- Customs clearance history at ports
-- Carrier reputation (Maersk, DHL, etc.)
-
-**Cargo Properties:**
-- Invoice amount
-- Commodity type (electronics, textiles, food, etc.)
-- Temperature/humidity requirements (sensor-based)
-- Previous delivery success on same route
-
-**Logistics Metrics:**
-- Days in transit
-- Historical delay rates for route
-- Carrier on-time performance
-- Port congestion levels
-
-**Risk Factors:**
-- Number of waypoints/transfers
-- Countries/borders crossed
-- Geopolitical risk scores
-- Satellite tracking reliability
-
-### Why Route-Based, Not Owner-Based
-
-Unlike traditional HITA models that assess business owner creditworthiness, we assess **shipment collateral quality**:
-
-✅ **Route Risk** is predictable and data-driven  
-✅ **Satellite imagery** provides visual cargo verification  
-✅ **Carrier APIs** provide real-time location and status updates  
-✅ **Customs patterns** are verifiable and historical  
-✅ **Carrier performance** is measurable  
-✅ **Shipment itself** is the collateral (cargo stays tracked)
+| Feature | Description |
+|---------|-------------|
+| `monthly_txn_volume` | Monthly transaction count |
+| `avg_txn_size` | Average transaction amount |
+| `business_tenure_months` | Months since business registration |
+| `tracking_reliability_pct` | Shipment tracking uptime % |
+| `payment_consistency_score` | Payment regularity score |
+| `monthly_revenue` | Monthly revenue |
+| `num_employees` | Employee count |
+| `industry_sector_*` | One-hot encoded industry (F&B, logistics, manufacturing, retail, services, tech) |
 
 ---
 
-## 🛰️ Satellite Imagery & Shipping Partner API Integration
+## Enterprise-Grade Disbursement
 
-### Supported Platforms
+The disbursement Lambda implements a **production-grade** financial transaction flow:
 
-- **Carrier Tracking APIs** from shipping partners (Maersk, DHL, FedEx, CMA CGM)
-- **Satellite Imagery Services** for visual cargo verification
-- **WebSocket** for browser real-time updates
-- **Port Authority APIs** for customs and clearance status
-
-### Shipment Monitoring Features
-
-✅ **Real-time Location Tracking**
-- Continuous location updates via carrier APIs as shipments move through Malaysia-Singapore-Thailand corridor
-- Waypoint recording at ports, checkpoints, and warehouses
-- Integration with carrier tracking systems for accurate positioning
-
-✅ **Satellite Imagery Verification**
-- Visual confirmation of cargo at key waypoints
-- Container identification and verification
-- Port congestion monitoring
-- Weather and route condition assessment
-
-✅ **Customs & Border Events**
-- Automatic recording of port arrivals/departures via port authority APIs
-- Customs clearance status (CLEARED, PENDING_INSPECTION, HOLD)
-- Document validation timestamps
-- Automated alerts on delays
-
-✅ **Carrier Integration**
-- Real-time carrier updates (Maersk, DHL, FedEx, CMA CGM, local carriers)
-- Direct API integration with carrier systems for status
-- ETA updates based on live tracking
-- Automated status synchronization
-
-### Regional Coverage
-
-**Active Shipping Corridors:**
-- Port Klang (Malaysia) ↔ Port of Singapore
-- Penang Port (Malaysia) ↔ Bangkok (Thailand)
-- Johor Bahru (Malaysia) ↔ Singapore ↔ Manila (Philippines)
-- Kota Kinabalu (Sabah) ↔ Regional ports
-
-### Configuration
-
-Carrier API credentials and satellite imagery service configuration are managed through environment variables and the backend configuration system.
-
+1. **Pydantic Validation** — Strict request payload validation (`offerId` required)
+2. **Idempotency Check** — Rejects double-disbursement with `409 Conflict`
+3. **Atomic Status Transition** — `PENDING_ACCEPTANCE → ACCEPTED` with DynamoDB `ConditionExpression`
+4. **DuitNow Mock Payment** — Simulates external payment gateway latency
+5. **Transaction Ledger** — Writes immutable ledger record to `TransactionsTable`
+6. **Atomic Wallet Update** — Uses DynamoDB `ADD` expression for concurrent-safe balance increment
+7. **Rollback on Failure** — Automatic offer reversal + ledger reversal on any write failure
+8. **JWT Authentication** — Caller identity verified via JWT for authorization
 
 ---
 
-## 🛠️ Development Guide
+## Security & Compliance
 
-### Frontend Development
+- **JWT Authentication** — Bearer tokens with expiry management, auto-redirect on 401
+- **bcrypt Password Hashing** — Passwords never stored in plaintext
+- **DynamoDB Encryption** — SSE enabled on all tables + point-in-time recovery
+- **CORS Protection** — Configurable `AllowedOrigin` per environment
+- **API Throttling** — Gateway rate limiting (50 burst / 25 steady)
+- **PDPA Compliance** — Malaysian personal data protection standards
+- **BNM Guidelines** — Bank Negara Malaysia financing license requirements
+- **SES Verified Sender** — Email via AWS SES with verified sender identity
+
+---
+
+## Deployment
+
+### Frontend → Vercel
 
 ```bash
 cd frontend
-
-# Start dev server with hot reload
-npm run dev
-
-# Build for production
 npm run build
-
-# Run linter
-npm run lint
-
-# Preview production build
-npm run preview
+# Vercel auto-deploys from Git, or:
+vercel --prod
 ```
 
-**Key Pages to Modify:**
-- `pages/Shipments.jsx` - Add new route visualization and satellite imagery display
-- `pages/Financing.jsx` - Adjust financing terms UI
-- `components/RiskGauge.jsx` - Update risk visualization
-- `hooks/useWebSocket.js` - Handle carrier API updates and real-time data
-
-**Frontend Stack:**
-- React 19 with functional components & hooks
-- Vite for fast bundling and HMR
-- Tailwind CSS for responsive styling
-- Headless UI for accessible components
-- Recharts for route analytics visualizations
-- Framer Motion for approval animations
-- React Router for navigation
-- Axios for shipment & financing APIs
-
-### Backend Development
+### Backend → AWS (SAM)
 
 ```bash
-cd backend/lambda/credit-scoring
-
-# Run locally with SAM
-sam local start-api
-
-# Invoke specific function
-sam local invoke CreditScoringFunction -e events/shipment_track.json
-
-# Deploy to AWS
-sam deploy
-```
-
-**Key Lambda Functions to Modify:**
-- `handle_shipment_track()` - Parse carrier API data and satellite imagery
-- `handle_shipment_verify()` - Validate shipment status via carrier APIs
-- `handle_invoice_analyze()` - Route-based risk assessment
-- `handle_invoice_offer()` - Generate financing terms
-
-**Backend Stack:**
-- AWS Lambda (serverless compute)
-- boto3 (AWS SDK for Python)
-- DynamoDB for transaction storage
-- CloudFormation (via SAM)
-
-### ML Development
-
-```bash
-cd ml
-
-# Generate synthetic shipment data
-python generate_synthetic_data.py
-
-# Feature engineering and exploration
-python feature_engineering.py
-
-# Train route risk model
-python train_model.py
-
-# Test predictions on new routes
-python predict.py --origin "Port Klang" --destination "Singapore Port"
-```
-
-**Model Training Tips:**
-- Focus on routes with historical delivery data
-- Incorporate seasonal factors (monsoon, holidays)
-- Track customs delay patterns by port
-- Update quarterly with new shipping data
-
----
-
-## 📊 Synthetic Shipment Dataset
-
-The project includes a **synthetic supply chain dataset** (`ml/data/synthetic_sme_data.csv`) with:
-- **10,000+ shipment records** with realistic routes
-- **Route features** (origin, destination, distance, customs history)
-- **Cargo attributes** (value, commodity type, temperature requirements)
-- **Carrier data** (carrier name, historical performance)
-- **Satellite verification data**
-- **Delivery outcomes** (on-time, delayed, issues)
-- **Customs clearance data** (clearance time, flags, inspections)
-
-**Dataset Purpose:**
-- Model training and backtesting
-- Validation of risk scoring logic
-- Demo and testing in staging environment
-
-**Note:** This is synthetically generated data. In production:
-- Integrate with actual port APIs (Port Klang, Singapore, Bangkok, Manila)
-- Connect with carrier APIs for real tracking (Maersk, DHL, FedEx, CMA CGM)
-- Use actual customs clearance records
-- Implement satellite imagery services for cargo verification
-- Integrate shipping partner API webhooks for real-time updates
-
----
-
-## 🔒 Security & Compliance
-
-### Best Practices Implemented
-
-✅ **Authentication**
-- WebSocket authentication tokens for real-time feeds
-- AWS IAM roles and policies for Lambda
-- Carrier API authentication and credential management
-- Satellite imagery service API keys
-- Environment-based credential management
-
-✅ **Data Protection**
-- Encrypted connections (HTTPS/WSS) for all APIs
-- Sensitive data (invoice PDFs, routing info) encrypted at rest
-- PII handling in compliance with PDPA (Malaysia)
-
-✅ **Supply Chain Compliance**
-- Customs documentation tracking and validation
-- Carrier verification and authorization
-- Port authentication integration
-- Cargo insurance document requirements
-- Trade finance regulatory compliance (BNM guidelines)
-
-✅ **Audit & Logging**
-- CloudWatch logs for all Lambda invocations
-- Transaction audit trail for financing decisions
-- API request/response logging for dispute resolution
-- Shipment event timeline (immutable)
-
-### Environment Variables
-
-Create a `.env` file in the frontend:
-
-```env
-VITE_API_BASE_URL=https://api.tng-logistics.my (or localhost:3000)
-VITE_WS_URL=wss://api.tng-logistics.my/ws (or ws://localhost:8000/ws)
-VITE_MAX_RETRIES=3
-VITE_REQUEST_TIMEOUT=15000
-```
-
-### Regulatory Requirements
-
-- **BNM (Bank Negara Malaysia)** - Financing license requirements
-- **PDPA** - Personal data protection
-- **Customs** - Trade documentation standards
-- **Port Authority** - Shipment authorization
-- **Transport** - Carrier licensing verification
-
----
-
-## 📦 Deployment
-
-### AWS Production Deployment
-
-**Prerequisites:**
-- AWS Account with appropriate permissions
-- AWS CLI configured and authenticated
-- SAM CLI installed
-- Production RDS database (DynamoDB or Aurora)
-
-**Deployment Steps:**
-
-1. **Build ML artifacts:**
-   ```bash
-   cd ml
-   python train_model.py
-   python create_lambda_layer.py
-   ```
-
-2. **Deploy backend Lambda functions:**
-   ```bash
-   cd ../backend
-   sam build
-   sam deploy --guided
-   ```
-   
-   This will:
-   - Create Lambda functions for shipment tracking and invoice financing
-   - Set up API Gateway endpoints
-   - Provision DynamoDB tables
-   - Configure IAM roles
-   - Deploy ML layer
-
-3. **Deploy frontend (S3 + CloudFront):**
-   ```bash
-   cd ../frontend
-   npm run build
-   # Upload dist/ to S3 bucket
-   # Create CloudFront distribution pointing to S3
-   ```
-
-4. **Configure Production Environment:**
-   - Set `VITE_API_BASE_URL` to CloudAPI Gateway endpoint
-   - Set `VITE_WS_URL` to API Gateway WebSocket URL
-   - Configure custom domain with ACM certificate
-   - Enable WAF for API protection
-
-5. **Carrier & Satellite Integration:**
-   - Configure carrier API credentials (Maersk, DHL, FedEx, CMA CGM)
-   - Set up satellite imagery service API keys
-   - Configure webhook endpoints for carrier status updates
-   - Set up port authority API integrations
-
-### Local Development Deployment
-
-For rapid iteration and testing:
-
-```bash
-# Terminal 1: Backend (local Lambda)
 cd backend
-sam local start-api
-
-# Terminal 2: Frontend dev server
-cd frontend
-npm run dev
+sam build
+sam deploy --guided
+# Creates: 6 Lambda functions, 7 DynamoDB tables, 1 S3 bucket, API Gateway
 ```
 
-Access at `http://localhost:5173` with full local development environment.
-
-### CI/CD Pipeline (GitHub Actions)
-
-Create `.github/workflows/deploy.yml` for:
-- Auto-build on push to main
-- Run tests and linting
-- Build ML models
-- Deploy to staging on PR
-- Deploy to production on main merge
-
----
-
-## 🧪 Testing & QA
-
-### Shipment Tracking Tests
+### AI Layer → Alibaba Cloud (Serverless Devs)
 
 ```bash
-# Test real-time tracking API
-curl -X POST http://localhost:3000/shipment/track \
-  -H "Content-Type: application/json" \
-  -d '{"shipmentId": "SHP-7781", "includeWaypoints": true}'
-
-# Response includes: location, ETA, customs status, sensor data
+cd alibaba
+s deploy
+# Creates: Function Compute service with HTTP trigger
 ```
 
-### Invoice Financing Flow Test
+---
 
-```bash
-# 1. Upload shipment invoice
-curl -X POST http://localhost:3000/invoices/upload \
-  -H "Content-Type: application/json" \
-  -d '{"userId": "exporter-001", "invoiceAmount": 50000, "destination": "Singapore"}'
+## Documentation
 
-# 2. Analyze route risk
-curl -X POST http://localhost:3000/invoices/analyze \
-  -H "Content-Type: application/json" \
-  -d '{"invoiceId": "INV-xxx"}'
-
-# 3. Get financing offer
-curl -X GET http://localhost:3000/invoices/INV-xxx/offer
-
-# 4. Accept and disburse
-curl -X POST http://localhost:3000/invoices/INV-xxx/accept \
-  -H "Content-Type: application/json" \
-  -d '{"offerId": "OFF-yyy"}'
-```
-
-### WebSocket Real-Time Testing
-
-```bash
-# Use wscat to test WebSocket connection
-npm install -g wscat
-wscat -c ws://localhost:8000/ws
-
-# Should receive: shipment updates, satellite imagery, offer notifications
-```
-
-### QA Documentation
-
-See [qa-prep.md](docs/qa-prep.md) for:
-- End-to-end test scenarios
-- Edge cases (port delays, customs holds, sensor failures)
-- Performance benchmarks
-- Load testing procedures
-
-### Demo & Presentation
-
-See [demo-script.md](docs/demo-script.md) for:
-- 3.5-minute demo walkthrough
-- Key talking points (route-based underwriting)
-- UI flow explanation
-- Risk scoring visual explanation
+- [Demo Script](docs/demo-script.md) — Presentation walkthrough
+- [QA Prep](docs/qa-prep.md) — Testing scenarios
+- [CloudShell Deployment](docs/cloudshell-deployment.md) — AWS CloudShell setup
+- [Multi-Cloud Setup](docs/multi-cloud-setup.md) — Alibaba + AWS configuration
+- [Backend README](backend/README.md) — Lambda functions & APIs
+- [ML README](ml/README.md) — Model training guide
 
 ---
 
-## 📈 Performance & Scalability
+## Team
 
-### Current Metrics
-
-- **Route Risk Scoring**: <100ms (real-time API latency)
-- **Shipment Tracking**: <5s (GPS update frequency)
-- **Dashboard Load**: <2 seconds
-- **Concurrent Shipments**: 1,000+ tracked simultaneously
-- **Invoice Processing**: <500ms per document
-- **Tracking Throughput**: 10,000+ location updates per second
-
-### Scaling Strategies
-
-**Frontend:**
-- CloudFront CDN for global distribution
-- Edge caching for route/carrier data
-- Progressive Web App for mobile (future)
-
-**Backend (Lambda):**
-- Auto-scaling based on API calls
-- Concurrent execution limits: 1,000+
-- Reserved capacity for peak shipping seasons
-
-**Real-Time Integration:**
-- WebSocket connection pooling for carrier updates
-- Carrier API rate limiting and caching
-- Message deduplication to reduce noise
-
-**Database:**
-- DynamoDB auto-scaling for shipment records
-- Global secondary indexes for route queries
-- TTL policies for archival
-
-### Bottleneck Mitigation
-
-- **Customs delays**: Pre-fetch clearance status before shipment arrives
-- **Port congestion**: Integrate port APIs for real-time capacity
-- **Carrier API limits**: Implement caching and rate limiting strategies
-- **Satellite imagery**: Cache recent imagery, batch requests
-- **Model latency**: Cache route risk scores (valid 24h)
+**Group: Indecisive** — TnG FinHack 26
 
 ---
 
-## 🐛 Troubleshooting
+## License
 
-### Frontend Won't Connect to Backend
-
-**Problem:** Dashboard shows "No Data" or API errors
-
-**Solutions:**
-1. Verify `VITE_API_BASE_URL` matches Lambda endpoint:
-   ```bash
-   echo $VITE_API_BASE_URL
-   # Should match: http://localhost:3000 (local) or AWS endpoint (prod)
-   ```
-2. Check backend is running: `sam local start-api` should output "Running on..."
-3. Verify CORS headers: Lambda handler should include:
-   ```python
-   'Access-Control-Allow-Origin': '*'
-   ```
-
-### Shipment Tracking Not Updating
-
-**Problem:** Shipments stuck at same location, not receiving updates
-
-**Solutions:**
-1. Verify WebSocket connection:
-   ```bash
-   wscat -c ws://localhost:8000/ws
-   # Should print "[connected]"
-   ```
-2. Check carrier API credentials and rate limits
-3. Verify satellite imagery service is accessible
-4. Check browser console for parsing errors
-
-### Model Training Crashes
-
-**Problem:** "python train_model.py" fails with memory or import errors
-
-**Solutions:**
-1. Verify dependencies: `pip install -r ml/requirements.txt`
-2. Check Python version: `python --version` (3.9+ required)
-3. Ensure synthetic data exists:
-   ```bash
-   python ml/generate_synthetic_data.py
-   ls ml/data/synthetic_sme_data.csv
-   ```
-4. Free up memory: Close other applications
-5. Try reducing dataset size:
-   ```bash
-   # Modify generate_synthetic_data.py: NUM_RECORDS = 1000
-   ```
+This project is part of the TnG FinHack 26 competition.
 
 ---
 
-## 📚 Documentation
-
-- [Demo Script](docs/demo-script.md) - 3.5-minute presentation walkthrough
-- [QA Prep](docs/qa-prep.md) - Testing scenarios and edge cases
-- [Backend README](backend/README.md) - Lambda functions and APIs
-- [Frontend README](frontend/README.md) - React components
-- [ML README](ml/README.md) - Model training guide
-
----
-
-## 👥 Team
-
-**Group: Indecisive** - TnG FinHack 26
-
----
-
-## 📝 License
-
-This project is part of the TnG FinHack 26 competition. 
-
----
-
-## 🎯 Roadmap & Future Enhancements
-
-**Phase 1 (Current - MVP):**
-- ✅ Route-based risk scoring
-- ✅ Real-time shipment tracking via carrier APIs
-- ✅ Invoice financing (offer/acceptance)
-- ✅ Satellite imagery monitoring
-
-**Phase 2 (Q3 2026):**
-- [ ] Production ML model with real shipment data
-- [ ] Enhanced carrier API integrations (more carriers)
-- [ ] Advanced satellite imagery analysis (AI-powered)
-- [ ] Integration with BNM (Bank Negara Malaysia) APIs
-- [ ] Multiple currency support (SGD, THB, PHP, USD)
-- [ ] Automated customs clearance prediction
-- [ ] Carrier insurance integration
-
-**Phase 3 (Q4 2026):**
-- [ ] Mobile app for exporters (iOS/Android)
-- [ ] Advanced fraud detection (duplicate invoices, phantom shipments)
-- [ ] Port congestion forecasting
-- [ ] Supply chain financing for sub-tiers (vendors)
-- [ ] Blockchain for trade documents (future-proof)
-
-**Phase 4 (2027):**
-- [ ] Cross-border financing (Malaysia-Thailand-Vietnam corridor)
-- [ ] Predictive maintenance for cold chain logistics
-- [ ] AI-powered chatbot for shipment assistance
-- [ ] Yield optimization for lenders
-- [ ] Expansion to other Southeast Asian ports
-
----
-
-## 📞 Support & Questions
-
-For questions or issues:
-1. Review the troubleshooting section above
-2. Check individual component READMEs
-3. Review demo script and QA prep documents
-4. Check AWS CloudWatch logs for backend errors
-5. Contact the development team
-
----
-
-**Last Updated:** April 24, 2026  
-**Status:** Production Ready for Demo  
+**Last Updated:** April 26, 2026
+**Status:** Production Ready for Demo
 **Mission:** Financing shipping routes, not business owners
 
