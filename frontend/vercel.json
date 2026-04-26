@@ -1,5 +1,6 @@
 {
   "rewrites": [
+    { "source": "/api/(.*)", "destination": "https://5qyhme7fmg.execute-api.ap-southeast-1.amazonaws.com/dev/api/$1" },
     { "source": "/(.*)", "destination": "/index.html" }
   ]
 }

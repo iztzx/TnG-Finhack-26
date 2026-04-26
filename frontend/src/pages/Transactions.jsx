@@ -286,7 +286,7 @@ export default function Transactions() {
       {ledgerError && (
         <div className="flex items-center gap-3 rounded-2xl border border-amber-200 bg-amber-50 px-5 py-3 text-sm text-amber-800">
           <AlertTriangle className="h-4 w-4 shrink-0" />
-          <span>Transaction ledger unavailable: {ledgerError}. Showing invoice-based records only.</span>
+          <span>Transaction ledger unavailable: {ledgerError} Showing invoice-based records only.</span>
         </div>
       )}
 
