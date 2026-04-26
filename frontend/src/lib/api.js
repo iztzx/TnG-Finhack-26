@@ -56,7 +56,9 @@ api.interceptors.request.use(
 // We measure the grace period from when the tab becomes visible again, not
 // from when it was hidden — otherwise a long absence (>5s) would expire the
 // grace period before the user even returns.
-let lastVisibleAt = 0;
+// Start at Date.now() so the 5s grace period also covers initial page-load
+// disruptions (cold starts, CORS preflight delays on Vercel).
+let lastVisibleAt = Date.now();
 document.addEventListener('visibilitychange', () => {
   if (document.visibilityState === 'visible') lastVisibleAt = Date.now();
 });
@@ -82,11 +84,14 @@ api.interceptors.response.use(
     // Build a human-readable message
     let message;
     const isNetworkError = !error.response && error.request;
-    const recentlyUnhidden = Date.now() - lastVisibleAt < 5000; // 5s grace after tab switch
+    const isHidden = document.visibilityState === 'hidden';
+    const recentlyUnhidden = !isHidden && Date.now() - lastVisibleAt < 5000; // 5s grace after tab switch
 
     if (isNetworkError) {
       // Retry once for transient network errors (common when switching tabs on Vercel
-      // where the browser suspends connections and they don't always resume cleanly)
+      // where the browser suspends connections and they don't always resume cleanly).
+      // Only retry when the tab is visible and within the grace period — retrying
+      // while hidden will just fail again.
       const config = error.config;
       if (!config.__retried && recentlyUnhidden) {
         config.__retried = true;
@@ -97,8 +102,8 @@ api.interceptors.response.use(
           if (!retryErr.response && retryErr.request) {
             retryErr.friendlyMessage = 'Network error – please check your connection and try again.';
             retryErr.statusCode = undefined;
-            // Suppress toast during tab-switch grace period
-            if (!recentlyUnhidden) emitToast('error', retryErr.friendlyMessage);
+            // Suppress toast during tab-switch grace period / while hidden
+            if (!isHidden && !recentlyUnhidden) emitToast('error', retryErr.friendlyMessage);
             return Promise.reject(retryErr);
           }
           // Retry returned a proper error response – reject with it
@@ -106,8 +111,8 @@ api.interceptors.response.use(
         }
       }
       message = 'Network error – please check your connection and try again.';
-      // Suppress toast during tab-switch grace period – the page is still loading
-      if (recentlyUnhidden) {
+      // Suppress toast while the tab is hidden or during the grace period after return
+      if (isHidden || recentlyUnhidden) {
         error.friendlyMessage = message;
         error.statusCode = undefined;
         return Promise.reject(error);
@@ -151,10 +156,12 @@ alibabaApi.interceptors.response.use(
 
     // Tab-switch resilience — same protection as the main api instance
     const isNetworkError = !error.response && error.request;
-    const recentlyUnhidden = Date.now() - lastVisibleAt < 5000;
+    const isHidden = document.visibilityState === 'hidden';
+    const recentlyUnhidden = !isHidden && Date.now() - lastVisibleAt < 5000;
 
     if (isNetworkError) {
       const config = error.config;
+      // Only retry when the tab is visible and within the grace period
       if (!config.__retried && recentlyUnhidden) {
         config.__retried = true;
         try {
@@ -163,14 +170,15 @@ alibabaApi.interceptors.response.use(
           if (!retryErr.response && retryErr.request) {
             retryErr.friendlyMessage = 'Network error – please check your connection and try again.';
             retryErr.statusCode = undefined;
-            if (!recentlyUnhidden) emitToast('error', retryErr.friendlyMessage);
+            // Suppress toast during tab-switch grace period / while hidden
+            if (!isHidden && !recentlyUnhidden) emitToast('error', retryErr.friendlyMessage);
             return Promise.reject(retryErr);
           }
           return Promise.reject(retryErr);
         }
       }
-      // Suppress toast during the 5s grace period after tab becomes visible
-      if (recentlyUnhidden) {
+      // Suppress toast while the tab is hidden or during the grace period after return
+      if (isHidden || recentlyUnhidden) {
         error.friendlyMessage = 'Network error – please check your connection and try again.';
         error.statusCode = undefined;
         return Promise.reject(error);
